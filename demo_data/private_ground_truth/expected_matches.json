@@ -1,0 +1,1313 @@
+{
+  "as_of_date": "2026-09-01",
+  "batch_id": "BATCH-DEMO-001",
+  "records": [
+    {
+      "adjustments": [],
+      "allocations": [
+        {
+          "amount": "154960.00",
+          "currency": "INR",
+          "invoice_id": "INV-0001"
+        }
+      ],
+      "currency": "INR",
+      "expected_action": "AUTO_RECONCILED",
+      "is_reconcilable": true,
+      "scenarios": [
+        "exact_match"
+      ],
+      "transaction_amount": "154960.00",
+      "transaction_id": "BANK-0001"
+    },
+    {
+      "adjustments": [],
+      "allocations": [
+        {
+          "amount": "169780.00",
+          "currency": "INR",
+          "invoice_id": "INV-0002"
+        }
+      ],
+      "currency": "INR",
+      "expected_action": "AUTO_RECONCILED",
+      "is_reconcilable": true,
+      "scenarios": [
+        "exact_match"
+      ],
+      "transaction_amount": "169780.00",
+      "transaction_id": "BANK-0002"
+    },
+    {
+      "adjustments": [],
+      "allocations": [
+        {
+          "amount": "226075.00",
+          "currency": "INR",
+          "invoice_id": "INV-0003"
+        }
+      ],
+      "currency": "INR",
+      "expected_action": "AUTO_RECONCILED",
+      "is_reconcilable": true,
+      "scenarios": [
+        "exact_match"
+      ],
+      "transaction_amount": "226075.00",
+      "transaction_id": "BANK-0003"
+    },
+    {
+      "adjustments": [],
+      "allocations": [
+        {
+          "amount": "105185.00",
+          "currency": "INR",
+          "invoice_id": "INV-0004"
+        }
+      ],
+      "currency": "INR",
+      "expected_action": "AUTO_RECONCILED",
+      "is_reconcilable": true,
+      "scenarios": [
+        "exact_match"
+      ],
+      "transaction_amount": "105185.00",
+      "transaction_id": "BANK-0004"
+    },
+    {
+      "adjustments": [],
+      "allocations": [
+        {
+          "amount": "199020.00",
+          "currency": "INR",
+          "invoice_id": "INV-0005"
+        }
+      ],
+      "currency": "INR",
+      "expected_action": "AUTO_RECONCILED",
+      "is_reconcilable": true,
+      "scenarios": [
+        "exact_match"
+      ],
+      "transaction_amount": "199020.00",
+      "transaction_id": "BANK-0005"
+    },
+    {
+      "adjustments": [],
+      "allocations": [
+        {
+          "amount": "60655.00",
+          "currency": "INR",
+          "invoice_id": "INV-0006"
+        }
+      ],
+      "currency": "INR",
+      "expected_action": "AUTO_RECONCILED",
+      "is_reconcilable": true,
+      "scenarios": [
+        "exact_match"
+      ],
+      "transaction_amount": "60655.00",
+      "transaction_id": "BANK-0006"
+    },
+    {
+      "adjustments": [],
+      "allocations": [
+        {
+          "amount": "134420.00",
+          "currency": "INR",
+          "invoice_id": "INV-0007"
+        }
+      ],
+      "currency": "INR",
+      "expected_action": "AUTO_RECONCILED",
+      "is_reconcilable": true,
+      "scenarios": [
+        "exact_match"
+      ],
+      "transaction_amount": "134420.00",
+      "transaction_id": "BANK-0007"
+    },
+    {
+      "adjustments": [],
+      "allocations": [
+        {
+          "amount": "94270.00",
+          "currency": "INR",
+          "invoice_id": "INV-0008"
+        }
+      ],
+      "currency": "INR",
+      "expected_action": "AUTO_RECONCILED",
+      "is_reconcilable": true,
+      "scenarios": [
+        "exact_match"
+      ],
+      "transaction_amount": "94270.00",
+      "transaction_id": "BANK-0008"
+    },
+    {
+      "adjustments": [],
+      "allocations": [
+        {
+          "amount": "126085.00",
+          "currency": "INR",
+          "invoice_id": "INV-0009"
+        }
+      ],
+      "currency": "INR",
+      "expected_action": "AUTO_RECONCILED",
+      "is_reconcilable": true,
+      "scenarios": [
+        "exact_match"
+      ],
+      "transaction_amount": "126085.00",
+      "transaction_id": "BANK-0009"
+    },
+    {
+      "adjustments": [],
+      "allocations": [
+        {
+          "amount": "86545.00",
+          "currency": "INR",
+          "invoice_id": "INV-0010"
+        }
+      ],
+      "currency": "INR",
+      "expected_action": "AUTO_RECONCILED",
+      "is_reconcilable": true,
+      "scenarios": [
+        "exact_match"
+      ],
+      "transaction_amount": "86545.00",
+      "transaction_id": "BANK-0010"
+    },
+    {
+      "adjustments": [],
+      "allocations": [
+        {
+          "amount": "147085.00",
+          "currency": "INR",
+          "invoice_id": "INV-0011"
+        }
+      ],
+      "currency": "INR",
+      "expected_action": "AUTO_RECONCILED",
+      "is_reconcilable": true,
+      "scenarios": [
+        "exact_match"
+      ],
+      "transaction_amount": "147085.00",
+      "transaction_id": "BANK-0011"
+    },
+    {
+      "adjustments": [],
+      "allocations": [
+        {
+          "amount": "128900.00",
+          "currency": "INR",
+          "invoice_id": "INV-0012"
+        }
+      ],
+      "currency": "INR",
+      "expected_action": "AUTO_RECONCILED",
+      "is_reconcilable": true,
+      "scenarios": [
+        "exact_match"
+      ],
+      "transaction_amount": "128900.00",
+      "transaction_id": "BANK-0012"
+    },
+    {
+      "adjustments": [],
+      "allocations": [
+        {
+          "amount": "68215.00",
+          "currency": "INR",
+          "invoice_id": "INV-0013"
+        }
+      ],
+      "currency": "INR",
+      "expected_action": "AUTO_RECONCILED",
+      "is_reconcilable": true,
+      "scenarios": [
+        "exact_match"
+      ],
+      "transaction_amount": "68215.00",
+      "transaction_id": "BANK-0013"
+    },
+    {
+      "adjustments": [],
+      "allocations": [
+        {
+          "amount": "204315.00",
+          "currency": "INR",
+          "invoice_id": "INV-0014"
+        }
+      ],
+      "currency": "INR",
+      "expected_action": "AUTO_RECONCILED",
+      "is_reconcilable": true,
+      "scenarios": [
+        "exact_match"
+      ],
+      "transaction_amount": "204315.00",
+      "transaction_id": "BANK-0014"
+    },
+    {
+      "adjustments": [],
+      "allocations": [
+        {
+          "amount": "159210.00",
+          "currency": "INR",
+          "invoice_id": "INV-0015"
+        }
+      ],
+      "currency": "INR",
+      "expected_action": "AUTO_RECONCILED",
+      "is_reconcilable": true,
+      "scenarios": [
+        "exact_match"
+      ],
+      "transaction_amount": "159210.00",
+      "transaction_id": "BANK-0015"
+    },
+    {
+      "adjustments": [],
+      "allocations": [
+        {
+          "amount": "235785.00",
+          "currency": "INR",
+          "invoice_id": "INV-0016"
+        }
+      ],
+      "currency": "INR",
+      "expected_action": "AUTO_RECONCILED",
+      "is_reconcilable": true,
+      "scenarios": [
+        "exact_match"
+      ],
+      "transaction_amount": "235785.00",
+      "transaction_id": "BANK-0016"
+    },
+    {
+      "adjustments": [],
+      "allocations": [
+        {
+          "amount": "188160.00",
+          "currency": "INR",
+          "invoice_id": "INV-0017"
+        }
+      ],
+      "currency": "INR",
+      "expected_action": "AUTO_RECONCILED",
+      "is_reconcilable": true,
+      "scenarios": [
+        "exact_match"
+      ],
+      "transaction_amount": "188160.00",
+      "transaction_id": "BANK-0017"
+    },
+    {
+      "adjustments": [],
+      "allocations": [
+        {
+          "amount": "129345.00",
+          "currency": "INR",
+          "invoice_id": "INV-0018"
+        }
+      ],
+      "currency": "INR",
+      "expected_action": "AUTO_RECONCILED",
+      "is_reconcilable": true,
+      "scenarios": [
+        "exact_match"
+      ],
+      "transaction_amount": "129345.00",
+      "transaction_id": "BANK-0018"
+    },
+    {
+      "adjustments": [],
+      "allocations": [
+        {
+          "amount": "6455.00",
+          "currency": "INR",
+          "invoice_id": "INV-0019"
+        }
+      ],
+      "currency": "INR",
+      "expected_action": "AUTO_RECONCILED",
+      "is_reconcilable": true,
+      "scenarios": [
+        "exact_match"
+      ],
+      "transaction_amount": "6455.00",
+      "transaction_id": "BANK-0019"
+    },
+    {
+      "adjustments": [],
+      "allocations": [
+        {
+          "amount": "150740.00",
+          "currency": "INR",
+          "invoice_id": "INV-0020"
+        }
+      ],
+      "currency": "INR",
+      "expected_action": "AUTO_RECONCILED",
+      "is_reconcilable": true,
+      "scenarios": [
+        "exact_match"
+      ],
+      "transaction_amount": "150740.00",
+      "transaction_id": "BANK-0020"
+    },
+    {
+      "adjustments": [],
+      "allocations": [
+        {
+          "amount": "5100.00",
+          "currency": "INR",
+          "invoice_id": "INV-0021"
+        }
+      ],
+      "currency": "INR",
+      "expected_action": "AUTO_RECONCILED",
+      "is_reconcilable": true,
+      "scenarios": [
+        "reference_variation"
+      ],
+      "transaction_amount": "5100.00",
+      "transaction_id": "BANK-0021"
+    },
+    {
+      "adjustments": [],
+      "allocations": [
+        {
+          "amount": "182340.00",
+          "currency": "INR",
+          "invoice_id": "INV-0022"
+        }
+      ],
+      "currency": "INR",
+      "expected_action": "AUTO_RECONCILED",
+      "is_reconcilable": true,
+      "scenarios": [
+        "reference_variation"
+      ],
+      "transaction_amount": "182340.00",
+      "transaction_id": "BANK-0022"
+    },
+    {
+      "adjustments": [],
+      "allocations": [
+        {
+          "amount": "183850.00",
+          "currency": "INR",
+          "invoice_id": "INV-0023"
+        }
+      ],
+      "currency": "INR",
+      "expected_action": "AUTO_RECONCILED",
+      "is_reconcilable": true,
+      "scenarios": [
+        "reference_variation"
+      ],
+      "transaction_amount": "183850.00",
+      "transaction_id": "BANK-0023"
+    },
+    {
+      "adjustments": [],
+      "allocations": [
+        {
+          "amount": "169825.00",
+          "currency": "INR",
+          "invoice_id": "INV-0024"
+        }
+      ],
+      "currency": "INR",
+      "expected_action": "AUTO_RECONCILED",
+      "is_reconcilable": true,
+      "scenarios": [
+        "reference_variation"
+      ],
+      "transaction_amount": "169825.00",
+      "transaction_id": "BANK-0024"
+    },
+    {
+      "adjustments": [],
+      "allocations": [
+        {
+          "amount": "150805.00",
+          "currency": "INR",
+          "invoice_id": "INV-0025"
+        }
+      ],
+      "currency": "INR",
+      "expected_action": "AUTO_RECONCILED",
+      "is_reconcilable": true,
+      "scenarios": [
+        "reference_variation"
+      ],
+      "transaction_amount": "150805.00",
+      "transaction_id": "BANK-0025"
+    },
+    {
+      "adjustments": [],
+      "allocations": [
+        {
+          "amount": "116910.00",
+          "currency": "INR",
+          "invoice_id": "INV-0026"
+        }
+      ],
+      "currency": "INR",
+      "expected_action": "AUTO_RECONCILED",
+      "is_reconcilable": true,
+      "scenarios": [
+        "reference_variation",
+        "customer_alias"
+      ],
+      "transaction_amount": "116910.00",
+      "transaction_id": "BANK-0026"
+    },
+    {
+      "adjustments": [],
+      "allocations": [
+        {
+          "amount": "91695.00",
+          "currency": "INR",
+          "invoice_id": "INV-0027"
+        }
+      ],
+      "currency": "INR",
+      "expected_action": "AUTO_RECONCILED",
+      "is_reconcilable": true,
+      "scenarios": [
+        "reference_variation",
+        "customer_alias"
+      ],
+      "transaction_amount": "91695.00",
+      "transaction_id": "BANK-0027"
+    },
+    {
+      "adjustments": [],
+      "allocations": [
+        {
+          "amount": "89335.00",
+          "currency": "INR",
+          "invoice_id": "INV-0028"
+        }
+      ],
+      "currency": "INR",
+      "expected_action": "AUTO_RECONCILED",
+      "is_reconcilable": true,
+      "scenarios": [
+        "reference_variation",
+        "customer_alias"
+      ],
+      "transaction_amount": "89335.00",
+      "transaction_id": "BANK-0028"
+    },
+    {
+      "adjustments": [],
+      "allocations": [
+        {
+          "amount": "139725.00",
+          "currency": "INR",
+          "invoice_id": "INV-0029"
+        }
+      ],
+      "currency": "INR",
+      "expected_action": "AUTO_RECONCILED",
+      "is_reconcilable": true,
+      "scenarios": [
+        "reference_variation",
+        "customer_alias"
+      ],
+      "transaction_amount": "139725.00",
+      "transaction_id": "BANK-0029"
+    },
+    {
+      "adjustments": [],
+      "allocations": [
+        {
+          "amount": "98820.00",
+          "currency": "INR",
+          "invoice_id": "INV-0030"
+        }
+      ],
+      "currency": "INR",
+      "expected_action": "AUTO_RECONCILED",
+      "is_reconcilable": true,
+      "scenarios": [
+        "reference_variation",
+        "customer_alias"
+      ],
+      "transaction_amount": "98820.00",
+      "transaction_id": "BANK-0030"
+    },
+    {
+      "adjustments": [],
+      "allocations": [
+        {
+          "amount": "97005.00",
+          "currency": "INR",
+          "invoice_id": "INV-0031"
+        }
+      ],
+      "currency": "INR",
+      "expected_action": "AUTO_RECONCILED",
+      "is_reconcilable": true,
+      "scenarios": [
+        "reference_variation",
+        "customer_alias",
+        "missing_remittance"
+      ],
+      "transaction_amount": "97005.00",
+      "transaction_id": "BANK-0031"
+    },
+    {
+      "adjustments": [],
+      "allocations": [
+        {
+          "amount": "49870.00",
+          "currency": "INR",
+          "invoice_id": "INV-0032"
+        }
+      ],
+      "currency": "INR",
+      "expected_action": "AUTO_RECONCILED",
+      "is_reconcilable": true,
+      "scenarios": [
+        "reference_variation",
+        "customer_alias",
+        "missing_remittance"
+      ],
+      "transaction_amount": "49870.00",
+      "transaction_id": "BANK-0032"
+    },
+    {
+      "adjustments": [],
+      "allocations": [
+        {
+          "amount": "134970.00",
+          "currency": "INR",
+          "invoice_id": "INV-0033"
+        }
+      ],
+      "currency": "INR",
+      "expected_action": "AUTO_RECONCILED",
+      "is_reconcilable": true,
+      "scenarios": [
+        "reference_variation",
+        "customer_alias",
+        "missing_remittance"
+      ],
+      "transaction_amount": "134970.00",
+      "transaction_id": "BANK-0033"
+    },
+    {
+      "adjustments": [],
+      "allocations": [
+        {
+          "amount": "31785.00",
+          "currency": "INR",
+          "invoice_id": "INV-0034"
+        }
+      ],
+      "currency": "INR",
+      "expected_action": "AUTO_RECONCILED",
+      "is_reconcilable": true,
+      "scenarios": [
+        "reference_variation",
+        "customer_alias",
+        "missing_remittance"
+      ],
+      "transaction_amount": "31785.00",
+      "transaction_id": "BANK-0034"
+    },
+    {
+      "adjustments": [],
+      "allocations": [
+        {
+          "amount": "140025.00",
+          "currency": "INR",
+          "invoice_id": "INV-0035"
+        }
+      ],
+      "currency": "INR",
+      "expected_action": "AUTO_RECONCILED",
+      "is_reconcilable": true,
+      "scenarios": [
+        "reference_variation",
+        "customer_alias",
+        "missing_remittance"
+      ],
+      "transaction_amount": "140025.00",
+      "transaction_id": "BANK-0035"
+    },
+    {
+      "adjustments": [],
+      "allocations": [
+        {
+          "amount": "60973.35",
+          "currency": "INR",
+          "invoice_id": "INV-0036"
+        }
+      ],
+      "currency": "INR",
+      "expected_action": "NEEDS_REVIEW",
+      "is_reconcilable": true,
+      "scenarios": [
+        "partial_payment"
+      ],
+      "transaction_amount": "60973.35",
+      "transaction_id": "BANK-0036"
+    },
+    {
+      "adjustments": [],
+      "allocations": [
+        {
+          "amount": "85668.00",
+          "currency": "INR",
+          "invoice_id": "INV-0037"
+        }
+      ],
+      "currency": "INR",
+      "expected_action": "NEEDS_REVIEW",
+      "is_reconcilable": true,
+      "scenarios": [
+        "partial_payment"
+      ],
+      "transaction_amount": "85668.00",
+      "transaction_id": "BANK-0037"
+    },
+    {
+      "adjustments": [],
+      "allocations": [
+        {
+          "amount": "52497.00",
+          "currency": "INR",
+          "invoice_id": "INV-0038"
+        }
+      ],
+      "currency": "INR",
+      "expected_action": "NEEDS_REVIEW",
+      "is_reconcilable": true,
+      "scenarios": [
+        "partial_payment"
+      ],
+      "transaction_amount": "52497.00",
+      "transaction_id": "BANK-0038"
+    },
+    {
+      "adjustments": [],
+      "allocations": [
+        {
+          "amount": "169231.60",
+          "currency": "INR",
+          "invoice_id": "INV-0039"
+        }
+      ],
+      "currency": "INR",
+      "expected_action": "NEEDS_REVIEW",
+      "is_reconcilable": true,
+      "scenarios": [
+        "partial_payment"
+      ],
+      "transaction_amount": "169231.60",
+      "transaction_id": "BANK-0039"
+    },
+    {
+      "adjustments": [],
+      "allocations": [
+        {
+          "amount": "20108.45",
+          "currency": "INR",
+          "invoice_id": "INV-0040"
+        }
+      ],
+      "currency": "INR",
+      "expected_action": "NEEDS_REVIEW",
+      "is_reconcilable": true,
+      "scenarios": [
+        "partial_payment"
+      ],
+      "transaction_amount": "20108.45",
+      "transaction_id": "BANK-0040"
+    },
+    {
+      "adjustments": [],
+      "allocations": [
+        {
+          "amount": "80901.45",
+          "currency": "INR",
+          "invoice_id": "INV-0041"
+        }
+      ],
+      "currency": "INR",
+      "expected_action": "NEEDS_REVIEW",
+      "is_reconcilable": true,
+      "scenarios": [
+        "partial_payment"
+      ],
+      "transaction_amount": "80901.45",
+      "transaction_id": "BANK-0041"
+    },
+    {
+      "adjustments": [],
+      "allocations": [
+        {
+          "amount": "113203.80",
+          "currency": "INR",
+          "invoice_id": "INV-0042"
+        }
+      ],
+      "currency": "INR",
+      "expected_action": "NEEDS_REVIEW",
+      "is_reconcilable": true,
+      "scenarios": [
+        "partial_payment"
+      ],
+      "transaction_amount": "113203.80",
+      "transaction_id": "BANK-0042"
+    },
+    {
+      "adjustments": [],
+      "allocations": [
+        {
+          "amount": "43011.00",
+          "currency": "INR",
+          "invoice_id": "INV-0043"
+        }
+      ],
+      "currency": "INR",
+      "expected_action": "NEEDS_REVIEW",
+      "is_reconcilable": true,
+      "scenarios": [
+        "partial_payment"
+      ],
+      "transaction_amount": "43011.00",
+      "transaction_id": "BANK-0043"
+    },
+    {
+      "adjustments": [],
+      "allocations": [
+        {
+          "amount": "127243.00",
+          "currency": "INR",
+          "invoice_id": "INV-0044"
+        }
+      ],
+      "currency": "INR",
+      "expected_action": "NEEDS_REVIEW",
+      "is_reconcilable": true,
+      "scenarios": [
+        "partial_payment"
+      ],
+      "transaction_amount": "127243.00",
+      "transaction_id": "BANK-0044"
+    },
+    {
+      "adjustments": [],
+      "allocations": [
+        {
+          "amount": "78231.45",
+          "currency": "INR",
+          "invoice_id": "INV-0045"
+        }
+      ],
+      "currency": "INR",
+      "expected_action": "NEEDS_REVIEW",
+      "is_reconcilable": true,
+      "scenarios": [
+        "partial_payment"
+      ],
+      "transaction_amount": "78231.45",
+      "transaction_id": "BANK-0045"
+    },
+    {
+      "adjustments": [],
+      "allocations": [
+        {
+          "amount": "100600.00",
+          "currency": "INR",
+          "invoice_id": "INV-0046"
+        },
+        {
+          "amount": "116230.00",
+          "currency": "INR",
+          "invoice_id": "INV-0047"
+        }
+      ],
+      "currency": "INR",
+      "expected_action": "AUTO_RECONCILED",
+      "is_reconcilable": true,
+      "scenarios": [
+        "combined_payment"
+      ],
+      "transaction_amount": "216830.00",
+      "transaction_id": "BANK-0046"
+    },
+    {
+      "adjustments": [],
+      "allocations": [
+        {
+          "amount": "86250.00",
+          "currency": "INR",
+          "invoice_id": "INV-0048"
+        },
+        {
+          "amount": "206075.00",
+          "currency": "INR",
+          "invoice_id": "INV-0049"
+        }
+      ],
+      "currency": "INR",
+      "expected_action": "AUTO_RECONCILED",
+      "is_reconcilable": true,
+      "scenarios": [
+        "combined_payment"
+      ],
+      "transaction_amount": "292325.00",
+      "transaction_id": "BANK-0047"
+    },
+    {
+      "adjustments": [],
+      "allocations": [
+        {
+          "amount": "66610.00",
+          "currency": "INR",
+          "invoice_id": "INV-0050"
+        },
+        {
+          "amount": "97445.00",
+          "currency": "INR",
+          "invoice_id": "INV-0051"
+        }
+      ],
+      "currency": "INR",
+      "expected_action": "AUTO_RECONCILED",
+      "is_reconcilable": true,
+      "scenarios": [
+        "combined_payment"
+      ],
+      "transaction_amount": "164055.00",
+      "transaction_id": "BANK-0048"
+    },
+    {
+      "adjustments": [],
+      "allocations": [
+        {
+          "amount": "239435.00",
+          "currency": "INR",
+          "invoice_id": "INV-0052"
+        },
+        {
+          "amount": "163180.00",
+          "currency": "INR",
+          "invoice_id": "INV-0053"
+        }
+      ],
+      "currency": "INR",
+      "expected_action": "AUTO_RECONCILED",
+      "is_reconcilable": true,
+      "scenarios": [
+        "combined_payment"
+      ],
+      "transaction_amount": "402615.00",
+      "transaction_id": "BANK-0049"
+    },
+    {
+      "adjustments": [],
+      "allocations": [
+        {
+          "amount": "246215.00",
+          "currency": "INR",
+          "invoice_id": "INV-0054"
+        },
+        {
+          "amount": "22670.00",
+          "currency": "INR",
+          "invoice_id": "INV-0055"
+        }
+      ],
+      "currency": "INR",
+      "expected_action": "AUTO_RECONCILED",
+      "is_reconcilable": true,
+      "scenarios": [
+        "combined_payment"
+      ],
+      "transaction_amount": "268885.00",
+      "transaction_id": "BANK-0050"
+    },
+    {
+      "adjustments": [],
+      "allocations": [
+        {
+          "amount": "110630.00",
+          "currency": "INR",
+          "invoice_id": "INV-0056"
+        },
+        {
+          "amount": "218760.00",
+          "currency": "INR",
+          "invoice_id": "INV-0057"
+        }
+      ],
+      "currency": "INR",
+      "expected_action": "AUTO_RECONCILED",
+      "is_reconcilable": true,
+      "scenarios": [
+        "combined_payment"
+      ],
+      "transaction_amount": "329390.00",
+      "transaction_id": "BANK-0051"
+    },
+    {
+      "adjustments": [],
+      "allocations": [
+        {
+          "amount": "98675.00",
+          "currency": "INR",
+          "invoice_id": "INV-0058"
+        },
+        {
+          "amount": "81530.00",
+          "currency": "INR",
+          "invoice_id": "INV-0059"
+        }
+      ],
+      "currency": "INR",
+      "expected_action": "AUTO_RECONCILED",
+      "is_reconcilable": true,
+      "scenarios": [
+        "combined_payment"
+      ],
+      "transaction_amount": "180205.00",
+      "transaction_id": "BANK-0052"
+    },
+    {
+      "adjustments": [],
+      "allocations": [
+        {
+          "amount": "200465.00",
+          "currency": "INR",
+          "invoice_id": "INV-0060"
+        },
+        {
+          "amount": "105015.00",
+          "currency": "INR",
+          "invoice_id": "INV-0061"
+        }
+      ],
+      "currency": "INR",
+      "expected_action": "AUTO_RECONCILED",
+      "is_reconcilable": true,
+      "scenarios": [
+        "combined_payment"
+      ],
+      "transaction_amount": "305480.00",
+      "transaction_id": "BANK-0053"
+    },
+    {
+      "adjustments": [],
+      "allocations": [
+        {
+          "amount": "89205.00",
+          "currency": "INR",
+          "invoice_id": "INV-0062"
+        },
+        {
+          "amount": "65245.00",
+          "currency": "INR",
+          "invoice_id": "INV-0063"
+        }
+      ],
+      "currency": "INR",
+      "expected_action": "AUTO_RECONCILED",
+      "is_reconcilable": true,
+      "scenarios": [
+        "combined_payment"
+      ],
+      "transaction_amount": "154450.00",
+      "transaction_id": "BANK-0054"
+    },
+    {
+      "adjustments": [],
+      "allocations": [
+        {
+          "amount": "159300.00",
+          "currency": "INR",
+          "invoice_id": "INV-0064"
+        },
+        {
+          "amount": "187745.00",
+          "currency": "INR",
+          "invoice_id": "INV-0065"
+        }
+      ],
+      "currency": "INR",
+      "expected_action": "AUTO_RECONCILED",
+      "is_reconcilable": true,
+      "scenarios": [
+        "combined_payment"
+      ],
+      "transaction_amount": "347045.00",
+      "transaction_id": "BANK-0055"
+    },
+    {
+      "adjustments": [
+        {
+          "amount": "69.25",
+          "currency": "INR",
+          "effect_on_transaction": "DEDUCT",
+          "type": "BANK_FEE"
+        }
+      ],
+      "allocations": [
+        {
+          "amount": "220285.00",
+          "currency": "INR",
+          "invoice_id": "INV-0066"
+        }
+      ],
+      "currency": "INR",
+      "expected_action": "NEEDS_REVIEW",
+      "is_reconcilable": true,
+      "scenarios": [
+        "fee_deduction"
+      ],
+      "transaction_amount": "220215.75",
+      "transaction_id": "BANK-0056"
+    },
+    {
+      "adjustments": [
+        {
+          "amount": "37.50",
+          "currency": "INR",
+          "effect_on_transaction": "DEDUCT",
+          "type": "BANK_FEE"
+        }
+      ],
+      "allocations": [
+        {
+          "amount": "175265.00",
+          "currency": "INR",
+          "invoice_id": "INV-0067"
+        }
+      ],
+      "currency": "INR",
+      "expected_action": "NEEDS_REVIEW",
+      "is_reconcilable": true,
+      "scenarios": [
+        "fee_deduction"
+      ],
+      "transaction_amount": "175227.50",
+      "transaction_id": "BANK-0057"
+    },
+    {
+      "adjustments": [
+        {
+          "amount": "247.25",
+          "currency": "INR",
+          "effect_on_transaction": "DEDUCT",
+          "type": "BANK_FEE"
+        }
+      ],
+      "allocations": [
+        {
+          "amount": "130200.00",
+          "currency": "INR",
+          "invoice_id": "INV-0068"
+        }
+      ],
+      "currency": "INR",
+      "expected_action": "NEEDS_REVIEW",
+      "is_reconcilable": true,
+      "scenarios": [
+        "fee_deduction"
+      ],
+      "transaction_amount": "129952.75",
+      "transaction_id": "BANK-0058"
+    },
+    {
+      "adjustments": [
+        {
+          "amount": "199.50",
+          "currency": "INR",
+          "effect_on_transaction": "DEDUCT",
+          "type": "BANK_FEE"
+        }
+      ],
+      "allocations": [
+        {
+          "amount": "81520.00",
+          "currency": "INR",
+          "invoice_id": "INV-0069"
+        }
+      ],
+      "currency": "INR",
+      "expected_action": "NEEDS_REVIEW",
+      "is_reconcilable": true,
+      "scenarios": [
+        "fee_deduction"
+      ],
+      "transaction_amount": "81320.50",
+      "transaction_id": "BANK-0059"
+    },
+    {
+      "adjustments": [
+        {
+          "amount": "57.25",
+          "currency": "INR",
+          "effect_on_transaction": "DEDUCT",
+          "type": "BANK_FEE"
+        }
+      ],
+      "allocations": [
+        {
+          "amount": "80440.00",
+          "currency": "INR",
+          "invoice_id": "INV-0070"
+        }
+      ],
+      "currency": "INR",
+      "expected_action": "NEEDS_REVIEW",
+      "is_reconcilable": true,
+      "scenarios": [
+        "fee_deduction"
+      ],
+      "transaction_amount": "80382.75",
+      "transaction_id": "BANK-0060"
+    },
+    {
+      "adjustments": [
+        {
+          "amount": "168.00",
+          "currency": "INR",
+          "effect_on_transaction": "RESIDUAL",
+          "type": "UNALLOCATED_OVERPAYMENT"
+        }
+      ],
+      "allocations": [
+        {
+          "amount": "32400.00",
+          "currency": "INR",
+          "invoice_id": "INV-0071"
+        }
+      ],
+      "currency": "INR",
+      "expected_action": "NEEDS_REVIEW",
+      "is_reconcilable": true,
+      "scenarios": [
+        "overpayment"
+      ],
+      "transaction_amount": "32568.00",
+      "transaction_id": "BANK-0061"
+    },
+    {
+      "adjustments": [
+        {
+          "amount": "132.50",
+          "currency": "INR",
+          "effect_on_transaction": "RESIDUAL",
+          "type": "UNALLOCATED_OVERPAYMENT"
+        }
+      ],
+      "allocations": [
+        {
+          "amount": "114540.00",
+          "currency": "INR",
+          "invoice_id": "INV-0072"
+        }
+      ],
+      "currency": "INR",
+      "expected_action": "NEEDS_REVIEW",
+      "is_reconcilable": true,
+      "scenarios": [
+        "overpayment"
+      ],
+      "transaction_amount": "114672.50",
+      "transaction_id": "BANK-0062"
+    },
+    {
+      "adjustments": [
+        {
+          "amount": "361.00",
+          "currency": "INR",
+          "effect_on_transaction": "RESIDUAL",
+          "type": "UNALLOCATED_OVERPAYMENT"
+        }
+      ],
+      "allocations": [
+        {
+          "amount": "40670.00",
+          "currency": "INR",
+          "invoice_id": "INV-0073"
+        }
+      ],
+      "currency": "INR",
+      "expected_action": "NEEDS_REVIEW",
+      "is_reconcilable": true,
+      "scenarios": [
+        "overpayment"
+      ],
+      "transaction_amount": "41031.00",
+      "transaction_id": "BANK-0063"
+    },
+    {
+      "adjustments": [
+        {
+          "amount": "234.00",
+          "currency": "INR",
+          "effect_on_transaction": "RESIDUAL",
+          "type": "UNALLOCATED_OVERPAYMENT"
+        }
+      ],
+      "allocations": [
+        {
+          "amount": "98775.00",
+          "currency": "INR",
+          "invoice_id": "INV-0074"
+        }
+      ],
+      "currency": "INR",
+      "expected_action": "NEEDS_REVIEW",
+      "is_reconcilable": true,
+      "scenarios": [
+        "overpayment"
+      ],
+      "transaction_amount": "99009.00",
+      "transaction_id": "BANK-0064"
+    },
+    {
+      "adjustments": [
+        {
+          "amount": "157.00",
+          "currency": "INR",
+          "effect_on_transaction": "RESIDUAL",
+          "type": "UNALLOCATED_OVERPAYMENT"
+        }
+      ],
+      "allocations": [
+        {
+          "amount": "174800.00",
+          "currency": "INR",
+          "invoice_id": "INV-0075"
+        }
+      ],
+      "currency": "INR",
+      "expected_action": "NEEDS_REVIEW",
+      "is_reconcilable": true,
+      "scenarios": [
+        "overpayment"
+      ],
+      "transaction_amount": "174957.00",
+      "transaction_id": "BANK-0065"
+    }
+  ],
+  "schema_version": "1.0",
+  "seed": 20260901
+}

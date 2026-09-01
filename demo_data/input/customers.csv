@@ -1,0 +1,21 @@
+customer_id,organization_id,canonical_name,default_currency,mean_payment_delay_days,payment_delay_stddev_days,payment_probability,status
+CUST-001,ORG-DEMO-001,Acme Private Limited,INR,3,3,0.960,ACTIVE
+CUST-002,ORG-DEMO-001,BluePeak Retail Limited,INR,6,4,0.935,ACTIVE
+CUST-003,ORG-DEMO-001,Cedar Labs India Private Limited,INR,9,5,0.910,ACTIVE
+CUST-004,ORG-DEMO-001,Delta Industrial Systems Limited,INR,12,6,0.885,ACTIVE
+CUST-005,ORG-DEMO-001,Evergreen Foods Private Limited,INR,2,2,0.860,ACTIVE
+CUST-006,ORG-DEMO-001,Falcon Mobility Limited,INR,5,3,0.835,ACTIVE
+CUST-007,ORG-DEMO-001,Granite Works India Private Limited,INR,8,4,0.810,ACTIVE
+CUST-008,ORG-DEMO-001,Harborline Logistics Limited,INR,11,5,0.785,ACTIVE
+CUST-009,ORG-DEMO-001,Indigo Health Systems Private Limited,INR,1,6,0.960,ACTIVE
+CUST-010,ORG-DEMO-001,Juniper Digital Commerce Limited,INR,4,2,0.935,ACTIVE
+CUST-011,ORG-DEMO-001,Keystone Energy Services Limited,INR,7,3,0.910,ACTIVE
+CUST-012,ORG-DEMO-001,Lotus Consumer Products Private Limited,INR,10,4,0.885,ACTIVE
+CUST-013,ORG-DEMO-001,Meridian Analytics India Limited,INR,0,5,0.860,ACTIVE
+CUST-014,ORG-DEMO-001,Northstar Components Private Limited,INR,3,6,0.835,ACTIVE
+CUST-015,ORG-DEMO-001,Orchid Hospitality Services Limited,INR,6,2,0.810,ACTIVE
+CUST-016,ORG-DEMO-001,Pioneer Office Solutions Private Limited,INR,9,3,0.785,ACTIVE
+CUST-017,ORG-DEMO-001,Quartz Media Networks Limited,INR,12,4,0.960,ACTIVE
+CUST-018,ORG-DEMO-001,Riverbend Engineering Private Limited,INR,2,5,0.935,ACTIVE
+CUST-019,ORG-DEMO-001,Summit Learning Systems Limited,INR,5,6,0.910,ACTIVE
+CUST-020,ORG-DEMO-001,Trident Packaging India Private Limited,INR,8,2,0.885,ACTIVE

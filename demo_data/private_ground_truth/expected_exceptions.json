@@ -1,0 +1,753 @@
+{
+  "as_of_date": "2026-09-01",
+  "batch_id": "BATCH-DEMO-001",
+  "records": [
+    {
+      "evidence": [
+        "No remittance record is linked to the bank transaction.",
+        "Normalized invoice reference, amount, currency, and customer still agree."
+      ],
+      "next_action": "Continue only if deterministic reference checks pass.",
+      "reason_code": "MISSING_REMITTANCE",
+      "record_id": "BANK-0031",
+      "record_type": "BANK_TRANSACTION",
+      "related_record_ids": [],
+      "scenarios": [
+        "missing_remittance"
+      ],
+      "severity": "WARNING",
+      "unsafe": false
+    },
+    {
+      "evidence": [
+        "No remittance record is linked to the bank transaction.",
+        "Normalized invoice reference, amount, currency, and customer still agree."
+      ],
+      "next_action": "Continue only if deterministic reference checks pass.",
+      "reason_code": "MISSING_REMITTANCE",
+      "record_id": "BANK-0032",
+      "record_type": "BANK_TRANSACTION",
+      "related_record_ids": [],
+      "scenarios": [
+        "missing_remittance"
+      ],
+      "severity": "WARNING",
+      "unsafe": false
+    },
+    {
+      "evidence": [
+        "No remittance record is linked to the bank transaction.",
+        "Normalized invoice reference, amount, currency, and customer still agree."
+      ],
+      "next_action": "Continue only if deterministic reference checks pass.",
+      "reason_code": "MISSING_REMITTANCE",
+      "record_id": "BANK-0033",
+      "record_type": "BANK_TRANSACTION",
+      "related_record_ids": [],
+      "scenarios": [
+        "missing_remittance"
+      ],
+      "severity": "WARNING",
+      "unsafe": false
+    },
+    {
+      "evidence": [
+        "No remittance record is linked to the bank transaction.",
+        "Normalized invoice reference, amount, currency, and customer still agree."
+      ],
+      "next_action": "Continue only if deterministic reference checks pass.",
+      "reason_code": "MISSING_REMITTANCE",
+      "record_id": "BANK-0034",
+      "record_type": "BANK_TRANSACTION",
+      "related_record_ids": [],
+      "scenarios": [
+        "missing_remittance"
+      ],
+      "severity": "WARNING",
+      "unsafe": false
+    },
+    {
+      "evidence": [
+        "No remittance record is linked to the bank transaction.",
+        "Normalized invoice reference, amount, currency, and customer still agree."
+      ],
+      "next_action": "Continue only if deterministic reference checks pass.",
+      "reason_code": "MISSING_REMITTANCE",
+      "record_id": "BANK-0035",
+      "record_type": "BANK_TRANSACTION",
+      "related_record_ids": [],
+      "scenarios": [
+        "missing_remittance"
+      ],
+      "severity": "WARNING",
+      "unsafe": false
+    },
+    {
+      "evidence": [
+        "Payment 60973.35 is below invoice balance 91005.00.",
+        "Invoice reference INV-2026-0036 is present."
+      ],
+      "next_action": "Confirm that the residual invoice balance should remain open.",
+      "reason_code": "PARTIAL_PAYMENT",
+      "record_id": "BANK-0036",
+      "record_type": "BANK_TRANSACTION",
+      "related_record_ids": [],
+      "scenarios": [
+        "partial_payment"
+      ],
+      "severity": "ERROR",
+      "unsafe": true
+    },
+    {
+      "evidence": [
+        "Payment 85668.00 is below invoice balance 145200.00.",
+        "Invoice reference INV-2026-0037 is present."
+      ],
+      "next_action": "Confirm that the residual invoice balance should remain open.",
+      "reason_code": "PARTIAL_PAYMENT",
+      "record_id": "BANK-0037",
+      "record_type": "BANK_TRANSACTION",
+      "related_record_ids": [],
+      "scenarios": [
+        "partial_payment"
+      ],
+      "severity": "ERROR",
+      "unsafe": true
+    },
+    {
+      "evidence": [
+        "Payment 52497.00 is below invoice balance 87495.00.",
+        "Invoice reference INV-2026-0038 is present."
+      ],
+      "next_action": "Confirm that the residual invoice balance should remain open.",
+      "reason_code": "PARTIAL_PAYMENT",
+      "record_id": "BANK-0038",
+      "record_type": "BANK_TRANSACTION",
+      "related_record_ids": [],
+      "scenarios": [
+        "partial_payment"
+      ],
+      "severity": "ERROR",
+      "unsafe": true
+    },
+    {
+      "evidence": [
+        "Payment 169231.60 is below invoice balance 248870.00.",
+        "Invoice reference INV-2026-0039 is present."
+      ],
+      "next_action": "Confirm that the residual invoice balance should remain open.",
+      "reason_code": "PARTIAL_PAYMENT",
+      "record_id": "BANK-0039",
+      "record_type": "BANK_TRANSACTION",
+      "related_record_ids": [],
+      "scenarios": [
+        "partial_payment"
+      ],
+      "severity": "ERROR",
+      "unsafe": true
+    },
+    {
+      "evidence": [
+        "Payment 20108.45 is below invoice balance 49045.00.",
+        "Invoice reference INV-2026-0040 is present."
+      ],
+      "next_action": "Confirm that the residual invoice balance should remain open.",
+      "reason_code": "PARTIAL_PAYMENT",
+      "record_id": "BANK-0040",
+      "record_type": "BANK_TRANSACTION",
+      "related_record_ids": [],
+      "scenarios": [
+        "partial_payment"
+      ],
+      "severity": "ERROR",
+      "unsafe": true
+    },
+    {
+      "evidence": [
+        "Payment 80901.45 is below invoice balance 128415.00.",
+        "Invoice reference INV-2026-0041 is present."
+      ],
+      "next_action": "Confirm that the residual invoice balance should remain open.",
+      "reason_code": "PARTIAL_PAYMENT",
+      "record_id": "BANK-0041",
+      "record_type": "BANK_TRANSACTION",
+      "related_record_ids": [],
+      "scenarios": [
+        "partial_payment"
+      ],
+      "severity": "ERROR",
+      "unsafe": true
+    },
+    {
+      "evidence": [
+        "Payment 113203.80 is below invoice balance 185580.00.",
+        "Invoice reference INV-2026-0042 is present."
+      ],
+      "next_action": "Confirm that the residual invoice balance should remain open.",
+      "reason_code": "PARTIAL_PAYMENT",
+      "record_id": "BANK-0042",
+      "record_type": "BANK_TRANSACTION",
+      "related_record_ids": [],
+      "scenarios": [
+        "partial_payment"
+      ],
+      "severity": "ERROR",
+      "unsafe": true
+    },
+    {
+      "evidence": [
+        "Payment 43011.00 is below invoice balance 72900.00.",
+        "Invoice reference INV-2026-0043 is present."
+      ],
+      "next_action": "Confirm that the residual invoice balance should remain open.",
+      "reason_code": "PARTIAL_PAYMENT",
+      "record_id": "BANK-0043",
+      "record_type": "BANK_TRANSACTION",
+      "related_record_ids": [],
+      "scenarios": [
+        "partial_payment"
+      ],
+      "severity": "ERROR",
+      "unsafe": true
+    },
+    {
+      "evidence": [
+        "Payment 127243.00 is below invoice balance 171950.00.",
+        "Invoice reference INV-2026-0044 is present."
+      ],
+      "next_action": "Confirm that the residual invoice balance should remain open.",
+      "reason_code": "PARTIAL_PAYMENT",
+      "record_id": "BANK-0044",
+      "record_type": "BANK_TRANSACTION",
+      "related_record_ids": [],
+      "scenarios": [
+        "partial_payment"
+      ],
+      "severity": "ERROR",
+      "unsafe": true
+    },
+    {
+      "evidence": [
+        "Payment 78231.45 is below invoice balance 153395.00.",
+        "Invoice reference INV-2026-0045 is present."
+      ],
+      "next_action": "Confirm that the residual invoice balance should remain open.",
+      "reason_code": "PARTIAL_PAYMENT",
+      "record_id": "BANK-0045",
+      "record_type": "BANK_TRANSACTION",
+      "related_record_ids": [],
+      "scenarios": [
+        "partial_payment"
+      ],
+      "severity": "ERROR",
+      "unsafe": true
+    },
+    {
+      "evidence": [
+        "Invoice exceeds cash received by 69.25 INR.",
+        "Bank narrative states LESS CHGS."
+      ],
+      "next_action": "Approve the permitted fee adjustment or request remittance evidence.",
+      "reason_code": "SUSPECTED_FEE",
+      "record_id": "BANK-0056",
+      "record_type": "BANK_TRANSACTION",
+      "related_record_ids": [],
+      "scenarios": [
+        "fee_deduction"
+      ],
+      "severity": "ERROR",
+      "unsafe": true
+    },
+    {
+      "evidence": [
+        "Invoice exceeds cash received by 37.50 INR.",
+        "Bank narrative states LESS CHGS."
+      ],
+      "next_action": "Approve the permitted fee adjustment or request remittance evidence.",
+      "reason_code": "SUSPECTED_FEE",
+      "record_id": "BANK-0057",
+      "record_type": "BANK_TRANSACTION",
+      "related_record_ids": [],
+      "scenarios": [
+        "fee_deduction"
+      ],
+      "severity": "ERROR",
+      "unsafe": true
+    },
+    {
+      "evidence": [
+        "Invoice exceeds cash received by 247.25 INR.",
+        "Bank narrative states LESS CHGS."
+      ],
+      "next_action": "Approve the permitted fee adjustment or request remittance evidence.",
+      "reason_code": "SUSPECTED_FEE",
+      "record_id": "BANK-0058",
+      "record_type": "BANK_TRANSACTION",
+      "related_record_ids": [],
+      "scenarios": [
+        "fee_deduction"
+      ],
+      "severity": "ERROR",
+      "unsafe": true
+    },
+    {
+      "evidence": [
+        "Invoice exceeds cash received by 199.50 INR.",
+        "Bank narrative states LESS CHGS."
+      ],
+      "next_action": "Approve the permitted fee adjustment or request remittance evidence.",
+      "reason_code": "SUSPECTED_FEE",
+      "record_id": "BANK-0059",
+      "record_type": "BANK_TRANSACTION",
+      "related_record_ids": [],
+      "scenarios": [
+        "fee_deduction"
+      ],
+      "severity": "ERROR",
+      "unsafe": true
+    },
+    {
+      "evidence": [
+        "Invoice exceeds cash received by 57.25 INR.",
+        "Bank narrative states LESS CHGS."
+      ],
+      "next_action": "Approve the permitted fee adjustment or request remittance evidence.",
+      "reason_code": "SUSPECTED_FEE",
+      "record_id": "BANK-0060",
+      "record_type": "BANK_TRANSACTION",
+      "related_record_ids": [],
+      "scenarios": [
+        "fee_deduction"
+      ],
+      "severity": "ERROR",
+      "unsafe": true
+    },
+    {
+      "evidence": [
+        "Cash received exceeds the referenced invoice by 168.00 INR."
+      ],
+      "next_action": "Allocate the invoice and place the residual on customer account.",
+      "reason_code": "OVERPAYMENT",
+      "record_id": "BANK-0061",
+      "record_type": "BANK_TRANSACTION",
+      "related_record_ids": [],
+      "scenarios": [
+        "overpayment"
+      ],
+      "severity": "ERROR",
+      "unsafe": true
+    },
+    {
+      "evidence": [
+        "Cash received exceeds the referenced invoice by 132.50 INR."
+      ],
+      "next_action": "Allocate the invoice and place the residual on customer account.",
+      "reason_code": "OVERPAYMENT",
+      "record_id": "BANK-0062",
+      "record_type": "BANK_TRANSACTION",
+      "related_record_ids": [],
+      "scenarios": [
+        "overpayment"
+      ],
+      "severity": "ERROR",
+      "unsafe": true
+    },
+    {
+      "evidence": [
+        "Cash received exceeds the referenced invoice by 361.00 INR."
+      ],
+      "next_action": "Allocate the invoice and place the residual on customer account.",
+      "reason_code": "OVERPAYMENT",
+      "record_id": "BANK-0063",
+      "record_type": "BANK_TRANSACTION",
+      "related_record_ids": [],
+      "scenarios": [
+        "overpayment"
+      ],
+      "severity": "ERROR",
+      "unsafe": true
+    },
+    {
+      "evidence": [
+        "Cash received exceeds the referenced invoice by 234.00 INR."
+      ],
+      "next_action": "Allocate the invoice and place the residual on customer account.",
+      "reason_code": "OVERPAYMENT",
+      "record_id": "BANK-0064",
+      "record_type": "BANK_TRANSACTION",
+      "related_record_ids": [],
+      "scenarios": [
+        "overpayment"
+      ],
+      "severity": "ERROR",
+      "unsafe": true
+    },
+    {
+      "evidence": [
+        "Cash received exceeds the referenced invoice by 157.00 INR."
+      ],
+      "next_action": "Allocate the invoice and place the residual on customer account.",
+      "reason_code": "OVERPAYMENT",
+      "record_id": "BANK-0065",
+      "record_type": "BANK_TRANSACTION",
+      "related_record_ids": [],
+      "scenarios": [
+        "overpayment"
+      ],
+      "severity": "ERROR",
+      "unsafe": true
+    },
+    {
+      "evidence": [
+        "Bank currency USD conflicts with invoice currency INR.",
+        "Reference points to INV-2026-0076 but currency is a hard constraint."
+      ],
+      "next_action": "Obtain FX or corrected-bank evidence; do not auto-reconcile.",
+      "reason_code": "CURRENCY_MISMATCH",
+      "record_id": "BANK-0066",
+      "record_type": "BANK_TRANSACTION",
+      "related_record_ids": [
+        "INV-0076"
+      ],
+      "scenarios": [
+        "currency_mismatch"
+      ],
+      "severity": "ERROR",
+      "unsafe": true
+    },
+    {
+      "evidence": [
+        "Bank currency USD conflicts with invoice currency INR.",
+        "Reference points to INV-2026-0077 but currency is a hard constraint."
+      ],
+      "next_action": "Obtain FX or corrected-bank evidence; do not auto-reconcile.",
+      "reason_code": "CURRENCY_MISMATCH",
+      "record_id": "BANK-0067",
+      "record_type": "BANK_TRANSACTION",
+      "related_record_ids": [
+        "INV-0077"
+      ],
+      "scenarios": [
+        "currency_mismatch"
+      ],
+      "severity": "ERROR",
+      "unsafe": true
+    },
+    {
+      "evidence": [
+        "Bank currency USD conflicts with invoice currency INR.",
+        "Reference points to INV-2026-0078 but currency is a hard constraint."
+      ],
+      "next_action": "Obtain FX or corrected-bank evidence; do not auto-reconcile.",
+      "reason_code": "CURRENCY_MISMATCH",
+      "record_id": "BANK-0068",
+      "record_type": "BANK_TRANSACTION",
+      "related_record_ids": [
+        "INV-0078"
+      ],
+      "scenarios": [
+        "currency_mismatch"
+      ],
+      "severity": "ERROR",
+      "unsafe": true
+    },
+    {
+      "evidence": [
+        "Bank currency USD conflicts with invoice currency INR.",
+        "Reference points to INV-2026-0079 but currency is a hard constraint."
+      ],
+      "next_action": "Obtain FX or corrected-bank evidence; do not auto-reconcile.",
+      "reason_code": "CURRENCY_MISMATCH",
+      "record_id": "BANK-0069",
+      "record_type": "BANK_TRANSACTION",
+      "related_record_ids": [
+        "INV-0079"
+      ],
+      "scenarios": [
+        "currency_mismatch"
+      ],
+      "severity": "ERROR",
+      "unsafe": true
+    },
+    {
+      "evidence": [
+        "Bank currency USD conflicts with invoice currency INR.",
+        "Reference points to INV-2026-0080 but currency is a hard constraint."
+      ],
+      "next_action": "Obtain FX or corrected-bank evidence; do not auto-reconcile.",
+      "reason_code": "CURRENCY_MISMATCH",
+      "record_id": "BANK-0070",
+      "record_type": "BANK_TRANSACTION",
+      "related_record_ids": [
+        "INV-0080"
+      ],
+      "scenarios": [
+        "currency_mismatch"
+      ],
+      "severity": "ERROR",
+      "unsafe": true
+    },
+    {
+      "evidence": [
+        "Two open invoices have the same customer, amount, currency, and dates.",
+        "The bank reference contains neither invoice number."
+      ],
+      "next_action": "Request remittance advice identifying the intended invoice.",
+      "reason_code": "AMBIGUOUS_MATCH",
+      "record_id": "BANK-0071",
+      "record_type": "BANK_TRANSACTION",
+      "related_record_ids": [
+        "INV-0081",
+        "INV-0082"
+      ],
+      "scenarios": [
+        "ambiguous_match"
+      ],
+      "severity": "ERROR",
+      "unsafe": true
+    },
+    {
+      "evidence": [
+        "Two open invoices have the same customer, amount, currency, and dates.",
+        "The bank reference contains neither invoice number."
+      ],
+      "next_action": "Request remittance advice identifying the intended invoice.",
+      "reason_code": "AMBIGUOUS_MATCH",
+      "record_id": "BANK-0072",
+      "record_type": "BANK_TRANSACTION",
+      "related_record_ids": [
+        "INV-0083",
+        "INV-0084"
+      ],
+      "scenarios": [
+        "ambiguous_match"
+      ],
+      "severity": "ERROR",
+      "unsafe": true
+    },
+    {
+      "evidence": [
+        "Two open invoices have the same customer, amount, currency, and dates.",
+        "The bank reference contains neither invoice number."
+      ],
+      "next_action": "Request remittance advice identifying the intended invoice.",
+      "reason_code": "AMBIGUOUS_MATCH",
+      "record_id": "BANK-0073",
+      "record_type": "BANK_TRANSACTION",
+      "related_record_ids": [
+        "INV-0085",
+        "INV-0086"
+      ],
+      "scenarios": [
+        "ambiguous_match"
+      ],
+      "severity": "ERROR",
+      "unsafe": true
+    },
+    {
+      "evidence": [
+        "Two open invoices have the same customer, amount, currency, and dates.",
+        "The bank reference contains neither invoice number."
+      ],
+      "next_action": "Request remittance advice identifying the intended invoice.",
+      "reason_code": "AMBIGUOUS_MATCH",
+      "record_id": "BANK-0074",
+      "record_type": "BANK_TRANSACTION",
+      "related_record_ids": [
+        "INV-0087",
+        "INV-0088"
+      ],
+      "scenarios": [
+        "ambiguous_match"
+      ],
+      "severity": "ERROR",
+      "unsafe": true
+    },
+    {
+      "evidence": [
+        "Two open invoices have the same customer, amount, currency, and dates.",
+        "The bank reference contains neither invoice number."
+      ],
+      "next_action": "Request remittance advice identifying the intended invoice.",
+      "reason_code": "AMBIGUOUS_MATCH",
+      "record_id": "BANK-0075",
+      "record_type": "BANK_TRANSACTION",
+      "related_record_ids": [
+        "INV-0089",
+        "INV-0090"
+      ],
+      "scenarios": [
+        "ambiguous_match"
+      ],
+      "severity": "ERROR",
+      "unsafe": true
+    },
+    {
+      "evidence": [
+        "No open invoice is compatible on identity and reference.",
+        "No remittance advice is available."
+      ],
+      "next_action": "Ask treasury to identify the sender and request remittance advice.",
+      "reason_code": "UNRECONCILABLE",
+      "record_id": "BANK-0076",
+      "record_type": "BANK_TRANSACTION",
+      "related_record_ids": [],
+      "scenarios": [
+        "unreconcilable"
+      ],
+      "severity": "ERROR",
+      "unsafe": true
+    },
+    {
+      "evidence": [
+        "No open invoice is compatible on identity and reference.",
+        "No remittance advice is available."
+      ],
+      "next_action": "Ask treasury to identify the sender and request remittance advice.",
+      "reason_code": "UNRECONCILABLE",
+      "record_id": "BANK-0077",
+      "record_type": "BANK_TRANSACTION",
+      "related_record_ids": [],
+      "scenarios": [
+        "unreconcilable"
+      ],
+      "severity": "ERROR",
+      "unsafe": true
+    },
+    {
+      "evidence": [
+        "No open invoice is compatible on identity and reference.",
+        "No remittance advice is available."
+      ],
+      "next_action": "Ask treasury to identify the sender and request remittance advice.",
+      "reason_code": "UNRECONCILABLE",
+      "record_id": "BANK-0078",
+      "record_type": "BANK_TRANSACTION",
+      "related_record_ids": [],
+      "scenarios": [
+        "unreconcilable"
+      ],
+      "severity": "ERROR",
+      "unsafe": true
+    },
+    {
+      "evidence": [
+        "No open invoice is compatible on identity and reference.",
+        "No remittance advice is available."
+      ],
+      "next_action": "Ask treasury to identify the sender and request remittance advice.",
+      "reason_code": "UNRECONCILABLE",
+      "record_id": "BANK-0079",
+      "record_type": "BANK_TRANSACTION",
+      "related_record_ids": [],
+      "scenarios": [
+        "unreconcilable"
+      ],
+      "severity": "ERROR",
+      "unsafe": true
+    },
+    {
+      "evidence": [
+        "No open invoice is compatible on identity and reference.",
+        "No remittance advice is available."
+      ],
+      "next_action": "Ask treasury to identify the sender and request remittance advice.",
+      "reason_code": "UNRECONCILABLE",
+      "record_id": "BANK-0080",
+      "record_type": "BANK_TRANSACTION",
+      "related_record_ids": [],
+      "scenarios": [
+        "unreconcilable"
+      ],
+      "severity": "ERROR",
+      "unsafe": true
+    },
+    {
+      "evidence": [
+        "Customer, external invoice number, amount, currency, and issue date are identical."
+      ],
+      "next_action": "Confirm the source-system duplicate and reject one record.",
+      "reason_code": "DUPLICATE_INVOICE",
+      "record_id": "INV-0096",
+      "record_type": "INVOICE",
+      "related_record_ids": [
+        "INV-0091"
+      ],
+      "scenarios": [
+        "duplicate_invoice"
+      ],
+      "severity": "ERROR",
+      "unsafe": true
+    },
+    {
+      "evidence": [
+        "Customer, external invoice number, amount, currency, and issue date are identical."
+      ],
+      "next_action": "Confirm the source-system duplicate and reject one record.",
+      "reason_code": "DUPLICATE_INVOICE",
+      "record_id": "INV-0097",
+      "record_type": "INVOICE",
+      "related_record_ids": [
+        "INV-0092"
+      ],
+      "scenarios": [
+        "duplicate_invoice"
+      ],
+      "severity": "ERROR",
+      "unsafe": true
+    },
+    {
+      "evidence": [
+        "Customer, external invoice number, amount, currency, and issue date are identical."
+      ],
+      "next_action": "Confirm the source-system duplicate and reject one record.",
+      "reason_code": "DUPLICATE_INVOICE",
+      "record_id": "INV-0098",
+      "record_type": "INVOICE",
+      "related_record_ids": [
+        "INV-0093"
+      ],
+      "scenarios": [
+        "duplicate_invoice"
+      ],
+      "severity": "ERROR",
+      "unsafe": true
+    },
+    {
+      "evidence": [
+        "Customer, external invoice number, amount, currency, and issue date are identical."
+      ],
+      "next_action": "Confirm the source-system duplicate and reject one record.",
+      "reason_code": "DUPLICATE_INVOICE",
+      "record_id": "INV-0099",
+      "record_type": "INVOICE",
+      "related_record_ids": [
+        "INV-0094"
+      ],
+      "scenarios": [
+        "duplicate_invoice"
+      ],
+      "severity": "ERROR",
+      "unsafe": true
+    },
+    {
+      "evidence": [
+        "Customer, external invoice number, amount, currency, and issue date are identical."
+      ],
+      "next_action": "Confirm the source-system duplicate and reject one record.",
+      "reason_code": "DUPLICATE_INVOICE",
+      "record_id": "INV-0100",
+      "record_type": "INVOICE",
+      "related_record_ids": [
+        "INV-0095"
+      ],
+      "scenarios": [
+        "duplicate_invoice"
+      ],
+      "severity": "ERROR",
+      "unsafe": true
+    }
+  ],
+  "schema_version": "1.0",
+  "seed": 20260901
+}

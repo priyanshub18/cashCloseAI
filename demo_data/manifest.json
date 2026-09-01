@@ -1,0 +1,73 @@
+{
+  "accounting_timezone": "Asia/Kolkata",
+  "as_of_date": "2026-09-01",
+  "batch_id": "BATCH-DEMO-001",
+  "dataset": "CashClose deterministic demo",
+  "files": {
+    "input/bank_transactions.csv": {
+      "sha256": "2604dfc99586e752515ed02b4fe73ea690e99713c471e6638782ca36c8bcb4f5"
+    },
+    "input/customer_aliases.csv": {
+      "sha256": "900d17df986bf4924ab61577c76cc89cf3aefebd4f4792e12c5dbce09edcce88"
+    },
+    "input/customers.csv": {
+      "sha256": "09dec1efbd2ac20ce154f40863ffd3a02479eed19a3bcb7d92e4f866c11150cd"
+    },
+    "input/invoices.csv": {
+      "sha256": "c473c0430bc909ebb8f6699b2e7ce12353ddd3c26ed22bc53acfe399ee296e32"
+    },
+    "input/ledger_entries.csv": {
+      "sha256": "c31b207dee2659d8172310b0e95b6c022e1894ec65438055400a2fc96b567217"
+    },
+    "input/recurring_cash_flows.csv": {
+      "sha256": "f1efa6b934b846292989ac6e459518256014e664185fe4324442533752aec489"
+    },
+    "input/remittances.csv": {
+      "sha256": "90c43b522d93668b8d23b13dd944fdd61fd82a243dd89a51417ee7347047a817"
+    },
+    "private_ground_truth/expected_exceptions.json": {
+      "sha256": "07ec7fce9372f92111fe66c87ebf6dd1853b4f44c1b6c0cf5acc59fe4814f4fb"
+    },
+    "private_ground_truth/expected_matches.json": {
+      "sha256": "aaf83a5b35b99af5bf434881f907c5fbca42865b5075e44fa0e58afed8ec5147"
+    },
+    "private_ground_truth/future_actual_cash.csv": {
+      "sha256": "ff753810ac748cdb8f70bb1405fdecc26d53d01b1f771844a7d20d115a1a255b"
+    }
+  },
+  "generated_at": "2026-09-01T00:00:00Z",
+  "organization_id": "ORG-DEMO-001",
+  "row_counts": {
+    "bank_transactions": 80,
+    "customer_aliases": 10,
+    "customers": 20,
+    "expected_exceptions": 45,
+    "expected_matches": 65,
+    "future_actual_cash_days": 30,
+    "invoices": 100,
+    "ledger_entries": 70,
+    "recurring_cash_flows": 15,
+    "remittances": 40
+  },
+  "scenario_counts": {
+    "ambiguous_match": 5,
+    "combined_payment": 10,
+    "currency_mismatch": 5,
+    "customer_alias": 10,
+    "duplicate_invoice": 5,
+    "exact_match": 20,
+    "fee_deduction": 5,
+    "missing_remittance": 5,
+    "overpayment": 5,
+    "partial_payment": 10,
+    "reference_variation": 15,
+    "unreconcilable": 5
+  },
+  "schema_version": "1.0",
+  "security": {
+    "agent_visible_directory": "input",
+    "evaluator_only_directory": "private_ground_truth",
+    "ground_truth_must_not_be_mounted_into_agent_runtime": true
+  },
+  "seed": 20260901
+}

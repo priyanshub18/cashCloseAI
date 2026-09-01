@@ -1,0 +1,41 @@
+remittance_id,batch_id,transaction_id,received_at,sender,raw_text,source
+RMT-0001,BATCH-DEMO-001,BANK-0001,2026-08-26T07:30:00Z,Acme Private Limited,Payment advice for INV-2026-0001; INR 154960.00 in full.,EMAIL
+RMT-0002,BATCH-DEMO-001,BANK-0002,2026-08-30T07:30:00Z,BluePeak Retail Limited,Payment advice for INV-2026-0002; INR 169780.00 in full.,EMAIL
+RMT-0003,BATCH-DEMO-001,BANK-0003,2026-08-24T07:30:00Z,Cedar Labs India Private Limited,Payment advice for INV-2026-0003; INR 226075.00 in full.,EMAIL
+RMT-0004,BATCH-DEMO-001,BANK-0004,2026-09-01T07:30:00Z,Delta Industrial Systems Limited,Payment advice for INV-2026-0004; INR 105185.00 in full.,EMAIL
+RMT-0005,BATCH-DEMO-001,BANK-0005,2026-08-23T07:30:00Z,Evergreen Foods Private Limited,Payment advice for INV-2026-0005; INR 199020.00 in full.,EMAIL
+RMT-0006,BATCH-DEMO-001,BANK-0006,2026-08-20T07:30:00Z,Falcon Mobility Limited,Payment advice for INV-2026-0006; INR 60655.00 in full.,EMAIL
+RMT-0007,BATCH-DEMO-001,BANK-0007,2026-08-27T07:30:00Z,Granite Works India Private Limited,Payment advice for INV-2026-0007; INR 134420.00 in full.,EMAIL
+RMT-0008,BATCH-DEMO-001,BANK-0008,2026-08-31T07:30:00Z,Harborline Logistics Limited,Payment advice for INV-2026-0008; INR 94270.00 in full.,EMAIL
+RMT-0009,BATCH-DEMO-001,BANK-0009,2026-08-30T07:30:00Z,Indigo Health Systems Private Limited,Payment advice for INV-2026-0009; INR 126085.00 in full.,EMAIL
+RMT-0010,BATCH-DEMO-001,BANK-0010,2026-09-01T07:30:00Z,Juniper Digital Commerce Limited,Payment advice for INV-2026-0010; INR 86545.00 in full.,EMAIL
+RMT-0011,BATCH-DEMO-001,BANK-0011,2026-08-29T07:30:00Z,Keystone Energy Services Limited,Payment advice for INV-2026-0011; INR 147085.00 in full.,EMAIL
+RMT-0012,BATCH-DEMO-001,BANK-0012,2026-08-28T07:30:00Z,Lotus Consumer Products Private Limited,Payment advice for INV-2026-0012; INR 128900.00 in full.,EMAIL
+RMT-0013,BATCH-DEMO-001,BANK-0013,2026-08-25T07:30:00Z,Meridian Analytics India Limited,Payment advice for INV-2026-0013; INR 68215.00 in full.,EMAIL
+RMT-0014,BATCH-DEMO-001,BANK-0014,2026-08-25T07:30:00Z,Northstar Components Private Limited,Payment advice for INV-2026-0014; INR 204315.00 in full.,EMAIL
+RMT-0015,BATCH-DEMO-001,BANK-0015,2026-08-28T07:30:00Z,Orchid Hospitality Services Limited,Payment advice for INV-2026-0015; INR 159210.00 in full.,EMAIL
+RMT-0016,BATCH-DEMO-001,BANK-0016,2026-08-28T07:30:00Z,Pioneer Office Solutions Private Limited,Payment advice for INV-2026-0016; INR 235785.00 in full.,EMAIL
+RMT-0017,BATCH-DEMO-001,BANK-0017,2026-08-29T07:30:00Z,Quartz Media Networks Limited,Payment advice for INV-2026-0017; INR 188160.00 in full.,EMAIL
+RMT-0018,BATCH-DEMO-001,BANK-0018,2026-08-28T07:30:00Z,Riverbend Engineering Private Limited,Payment advice for INV-2026-0018; INR 129345.00 in full.,EMAIL
+RMT-0019,BATCH-DEMO-001,BANK-0019,2026-08-26T07:30:00Z,Summit Learning Systems Limited,Payment advice for INV-2026-0019; INR 6455.00 in full.,EMAIL
+RMT-0020,BATCH-DEMO-001,BANK-0020,2026-08-30T07:30:00Z,Trident Packaging India Private Limited,Payment advice for INV-2026-0020; INR 150740.00 in full.,EMAIL
+RMT-0021,BATCH-DEMO-001,BANK-0021,2026-08-27T07:30:00Z,Acme Private Limited,Settlement reference INV 2026 0021 from Acme Private Limited.,EMAIL
+RMT-0022,BATCH-DEMO-001,BANK-0022,2026-08-21T07:30:00Z,BluePeak Retail Limited,Settlement reference INV 2026 0022 from BluePeak Retail Limited.,EMAIL
+RMT-0023,BATCH-DEMO-001,BANK-0023,2026-08-22T07:30:00Z,Cedar Labs India Private Limited,Settlement reference INV 2026 0023 from Cedar Labs India Private Limited.,EMAIL
+RMT-0024,BATCH-DEMO-001,BANK-0024,2026-08-20T07:30:00Z,Delta Industrial Systems Limited,Settlement reference INV 2026 0024 from Delta Industrial Systems Limited.,EMAIL
+RMT-0025,BATCH-DEMO-001,BANK-0025,2026-08-27T07:30:00Z,Evergreen Foods Private Limited,Settlement reference INV 2026 0025 from Evergreen Foods Private Limited.,EMAIL
+RMT-0026,BATCH-DEMO-001,BANK-0026,2026-08-31T07:30:00Z,ACME PVT,Settlement reference INV 2026 0026 from ACME PVT.,EMAIL
+RMT-0027,BATCH-DEMO-001,BANK-0027,2026-08-29T07:30:00Z,BLUEPEAK RETAIL,Settlement reference INV 2026 0027 from BLUEPEAK RETAIL.,EMAIL
+RMT-0028,BATCH-DEMO-001,BANK-0028,2026-08-29T07:30:00Z,CEDAR LABS INDIA,Settlement reference INV 2026 0028 from CEDAR LABS INDIA.,EMAIL
+RMT-0029,BATCH-DEMO-001,BANK-0029,2026-08-21T07:30:00Z,DELTA INDUSTRIAL,Settlement reference INV 2026 0029 from DELTA INDUSTRIAL.,EMAIL
+RMT-0030,BATCH-DEMO-001,BANK-0030,2026-08-30T07:30:00Z,EVERGREEN FOODS,Settlement reference INV 2026 0030 from EVERGREEN FOODS.,EMAIL
+RMT-0036,BATCH-DEMO-001,BANK-0036,2026-08-28T07:30:00Z,Pioneer Office Solutions Private Limited,Part payment 60973.35 against INV-2026-0036.,EMAIL
+RMT-0037,BATCH-DEMO-001,BANK-0037,2026-08-23T07:30:00Z,Quartz Media Networks Limited,Part payment 85668.00 against INV-2026-0037.,EMAIL
+RMT-0038,BATCH-DEMO-001,BANK-0038,2026-09-01T07:30:00Z,Riverbend Engineering Private Limited,Part payment 52497.00 against INV-2026-0038.,EMAIL
+RMT-0039,BATCH-DEMO-001,BANK-0039,2026-08-31T07:30:00Z,Summit Learning Systems Limited,Part payment 169231.60 against INV-2026-0039.,EMAIL
+RMT-0040,BATCH-DEMO-001,BANK-0040,2026-08-22T07:30:00Z,Trident Packaging India Private Limited,Part payment 20108.45 against INV-2026-0040.,EMAIL
+RMT-0046,BATCH-DEMO-001,BANK-0046,2026-08-31T07:30:00Z,Acme Private Limited,Combined settlement for INV-2026-0046 and INV-2026-0047 totaling INR 216830.00.,EMAIL
+RMT-0047,BATCH-DEMO-001,BANK-0047,2026-08-28T07:30:00Z,BluePeak Retail Limited,Combined settlement for INV-2026-0048 and INV-2026-0049 totaling INR 292325.00.,EMAIL
+RMT-0048,BATCH-DEMO-001,BANK-0048,2026-08-31T07:30:00Z,Cedar Labs India Private Limited,Combined settlement for INV-2026-0050 and INV-2026-0051 totaling INR 164055.00.,EMAIL
+RMT-0049,BATCH-DEMO-001,BANK-0049,2026-08-31T07:30:00Z,Delta Industrial Systems Limited,Combined settlement for INV-2026-0052 and INV-2026-0053 totaling INR 402615.00.,EMAIL
+RMT-0050,BATCH-DEMO-001,BANK-0050,2026-08-24T07:30:00Z,Evergreen Foods Private Limited,Combined settlement for INV-2026-0054 and INV-2026-0055 totaling INR 268885.00.,EMAIL
