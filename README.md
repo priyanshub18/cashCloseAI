@@ -30,7 +30,7 @@ ground truth.
 - Pydantic validation around every tool input and result
 - Idempotent commit, verifier approval, currency checks, invoice-reuse
   prevention, and hard-risk exception routing
-- Synthetic 340-row visible dataset plus evaluator-only truth artifacts
+- Synthetic 335-row visible dataset plus evaluator-only truth artifacts
 
 ## Repository map
 
