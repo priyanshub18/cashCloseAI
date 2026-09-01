@@ -94,6 +94,38 @@ class GenerationSummary:
         }
 
 
+def build_agent_visible_dataset(
+    *,
+    seed: int = DEFAULT_SEED,
+    as_of_date: date = DEFAULT_AS_OF_DATE,
+) -> dict[str, list[dict[str, str]]]:
+    """Build the fixed-seed demo inputs without exposing evaluator truth.
+
+    This is the in-memory counterpart to :func:`generate_dataset`.  It is used
+    by the API's zero-upload demo mode, where writing a private-ground-truth
+    directory into the application runtime would violate the agent boundary.
+    The private match and exception structures produced while planting the
+    scenarios are deliberately discarded before this function returns.
+    """
+
+    rng = random.Random(seed)
+    customers, aliases = _build_customers()
+    invoices, invoices_by_number = _build_invoices(rng, as_of_date)
+    transactions, remittances, _private_matches, _private_exceptions = (
+        _build_transactions_and_truth(rng, as_of_date, invoices_by_number)
+    )
+    ledger_entries = _build_ledger_entries(transactions, rng, as_of_date)
+    return {
+        "bank_transactions": transactions,
+        "invoices": invoices,
+        "ledger_entries": ledger_entries,
+        "remittances": remittances,
+        "customers": customers,
+        "customer_aliases": aliases,
+        "recurring_cash_flows": _build_recurring_cash_flows(as_of_date),
+    }
+
+
 def _money(value: Decimal | int | str) -> Decimal:
     return Decimal(value).quantize(MONEY_QUANTUM, rounding=ROUND_HALF_UP)
 
@@ -1100,4 +1132,3 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 if __name__ == "__main__":  # pragma: no cover
     raise SystemExit(main())
-

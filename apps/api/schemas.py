@@ -68,6 +68,16 @@ class RunBatchResponse(ApiSchema):
 class MatchList(ApiSchema):
     items: list[agent_schemas.ReconciliationDecision]
     proposals: list[agent_schemas.MatchProposal]
+    reviews: list["MatchReviewView"] = Field(default_factory=list)
+
+
+class MatchReviewView(ApiSchema):
+    proposal: agent_schemas.MatchProposal
+    transaction: agent_schemas.ReconciliationRecord
+    verification: agent_schemas.VerificationResult | None = None
+    decision: agent_schemas.ReconciliationDecision | None = None
+    linked_exception: agent_schemas.ExceptionRecord | None = None
+    allowed_actions: list[str] = Field(default_factory=list)
 
 
 class ExceptionList(ApiSchema):
@@ -78,8 +88,35 @@ class ResolveExceptionRequest(ApiSchema):
     resolution: Annotated[str, Field(min_length=3, max_length=1000)]
 
 
+class EditMatchRequest(ApiSchema):
+    expected_revision: int = Field(ge=1)
+    allocations: list[agent_schemas.Allocation] = Field(min_length=1, max_length=100)
+    permitted_deduction: Money = Field(default=Decimal("0.00"), ge=Decimal("0"))
+    edit_reason: Annotated[str, Field(min_length=3, max_length=500)]
+
+
+class ApproveMatchRequest(ApiSchema):
+    expected_revision: int = Field(ge=1)
+    idempotency_key: Annotated[
+        str,
+        StringConstraints(
+            strip_whitespace=True,
+            min_length=12,
+            max_length=128,
+            pattern=r"^[A-Za-z0-9._:-]+$",
+        ),
+    ]
+    approval_note: Annotated[str, Field(min_length=3, max_length=500)]
+
+
+class RejectMatchRequest(ApiSchema):
+    expected_revision: int = Field(ge=1)
+    rejection_reason: Annotated[str, Field(min_length=3, max_length=500)]
+
+
 class ScenarioActionType(StrEnum):
     CUSTOMER_PAYMENT_DELAY = "customer_payment_delay"
+    PAYABLE_DELAY = "payable_delay"
     ONE_TIME_OUTFLOW = "one_time_outflow"
 
 
@@ -87,9 +124,10 @@ class ScenarioRequest(ApiSchema):
     name: Annotated[str, Field(min_length=1, max_length=100)]
     action_type: ScenarioActionType
     customer_name: str | None = Field(default=None, min_length=1, max_length=200)
+    payable_name: str | None = Field(default=None, min_length=1, max_length=200)
     delay_days: int = Field(default=0, ge=0, le=90)
     amount: Money | None = Field(default=None, ge=Decimal("0"))
-    currency: CurrencyCode = "USD"
+    currency: CurrencyCode | None = None
 
     @model_validator(mode="after")
     def validate_action(self) -> "ScenarioRequest":
@@ -98,12 +136,51 @@ class ScenarioRequest(ApiSchema):
                 raise ValueError("customer payment delay requires customer_name and delay_days >= 1")
             if self.amount is not None:
                 raise ValueError("amount is not accepted for customer payment delay")
+            if self.payable_name is not None:
+                raise ValueError("payable_name is not accepted for customer payment delay")
+        if self.action_type is ScenarioActionType.PAYABLE_DELAY:
+            if not self.payable_name or self.delay_days < 1:
+                raise ValueError("payable delay requires payable_name and delay_days >= 1")
+            if self.customer_name is not None or self.amount is not None:
+                raise ValueError("customer_name and amount are not accepted for payable delay")
         if self.action_type is ScenarioActionType.ONE_TIME_OUTFLOW:
             if self.amount is None or self.amount <= 0:
                 raise ValueError("one-time outflow requires a positive amount")
-            if self.customer_name is not None or self.delay_days:
-                raise ValueError("customer fields are not accepted for a one-time outflow")
+            if self.currency is None:
+                raise ValueError("one-time outflow requires currency alongside amount")
+            if self.customer_name is not None or self.payable_name is not None or self.delay_days:
+                raise ValueError("counterparty delay fields are not accepted for a one-time outflow")
         return self
+
+
+class BatchValidationView(ApiSchema):
+    batch_id: Identifier
+    required_file_types: list[agent_schemas.FileKind]
+    uploaded_file_types: list[agent_schemas.FileKind]
+    missing_file_types: list[agent_schemas.FileKind]
+    demo_fixture_available: bool
+    validation: agent_schemas.ValidateBatchResult
+    can_run: bool
+
+
+class AgentEventPage(ApiSchema):
+    items: list[agent_schemas.AgentEvent]
+    next_sequence: int = Field(ge=0)
+    terminal: bool
+
+
+class RecordDetailView(ApiSchema):
+    record: agent_schemas.ReconciliationRecord
+    candidates: list[agent_schemas.CandidateInvoice] = Field(default_factory=list)
+    evidence: agent_schemas.GetMatchEvidenceResult | None = None
+    proposal: agent_schemas.MatchProposal | None = None
+    verification: agent_schemas.VerificationResult | None = None
+    decision: agent_schemas.ReconciliationDecision | None = None
+    exception: agent_schemas.ExceptionRecord | None = None
+
+
+class RecordList(ApiSchema):
+    items: list[RecordDetailView]
 
 
 class BatchMetricsView(ApiSchema):

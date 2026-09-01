@@ -12,6 +12,7 @@ from apps.api.service import CashCloseService, GuardrailError
 from packages.agents import schemas as s
 from packages.agents.openai_adapter import OpenAIResponsesAdapter
 from packages.agents.tools import responses_tool_definitions
+from packages.synthetic_data.generator import generate_dataset
 
 
 @pytest.fixture
@@ -38,6 +39,43 @@ def create_demo_batch(client: TestClient) -> str:
     return response.json()["batch_id"]
 
 
+def deterministic_match_inputs(
+    service: CashCloseService, batch_id: str
+) -> tuple[s.ReconciliationRecord, s.SolvePaymentAllocationResult, s.GetMatchEvidenceResult]:
+    records = service.invoke(
+        "get_unprocessed_records",
+        s.GetUnprocessedRecordsInput(batch_id=batch_id, limit=100),
+    )
+    assert isinstance(records, s.GetUnprocessedRecordsResult)
+    for record in records.records:
+        candidates = service.invoke(
+            "find_candidate_invoices",
+            s.FindCandidateInvoicesInput(transaction_id=record.record_id),
+        )
+        assert isinstance(candidates, s.FindCandidateInvoicesResult)
+        if not candidates.candidates:
+            continue
+        allocation = service.invoke(
+            "solve_payment_allocation",
+            s.SolvePaymentAllocationInput(
+                transaction_id=record.record_id,
+                candidate_invoice_ids=[item.invoice_id for item in candidates.candidates],
+            ),
+        )
+        evidence = service.invoke(
+            "get_match_evidence",
+            s.GetMatchEvidenceInput(
+                transaction_id=record.record_id,
+                candidate_ids=[item.invoice_id for item in candidates.candidates],
+            ),
+        )
+        assert isinstance(allocation, s.SolvePaymentAllocationResult)
+        assert isinstance(evidence, s.GetMatchEvidenceResult)
+        if allocation.feasible and allocation.alternatives == 1 and not evidence.risk_flags:
+            return record, allocation, evidence
+    raise AssertionError("the fixed demo seed must contain an exact deterministic match")
+
+
 def test_complete_demo_lifecycle_exposes_matches_forecast_metrics_and_audit(
     client: TestClient,
 ) -> None:
@@ -49,26 +87,37 @@ def test_complete_demo_lifecycle_exposes_matches_forecast_metrics_and_audit(
     assert run.status_code == 200, run.text
     body = run.json()
     assert body["batch"]["status"] == "COMPLETED"
-    assert body["controller"]["automatic_matches"] == 1
-    assert body["controller"]["exceptions_created"] == 1
+    assert body["controller"]["automatic_matches"] == 45
+    assert body["controller"]["exceptions_created"] == 35
     assert body["orchestration_mode"] == "deterministic-demo"
+    assert {item["file_type"]: item["row_count"] for item in body["batch"]["files"]} == {
+        "bank_transactions": 80,
+        "invoices": 100,
+        "ledger_entries": 70,
+        "remittances": 40,
+    }
 
     matches = client.get(f"/api/batches/{batch_id}/matches").json()
-    assert matches["items"][0]["transaction_id"].endswith("-0042")
-    assert matches["proposals"][0]["status"] == "COMMITTED"
-    assert matches["proposals"][0]["total_allocated"] == "84250.00"
+    committed = [item for item in matches["proposals"] if item["status"] == "COMMITTED"]
+    assert len(committed) == 45
+    assert any(len(item["allocations"]) > 1 for item in committed)
+    assert any(item["proposal"]["status"] == "NEEDS_REVIEW" for item in matches["reviews"])
 
     exceptions = client.get(f"/api/batches/{batch_id}/exceptions").json()
-    assert exceptions["items"][0]["reason_code"] == "AMBIGUOUS_MATCH"
-    assert exceptions["items"][0]["next_action"]
+    assert any(item["reason_code"] == "AMBIGUOUS_MATCH" for item in exceptions["items"])
+    assert all(item["next_action"] for item in exceptions["items"])
+    assert all(item["amount"] and item["currency"] for item in exceptions["items"])
+    assert all(item["candidate_invoices"] for item in exceptions["items"])
 
     forecast = client.get(f"/api/batches/{batch_id}/forecast").json()
     assert len(forecast["positions"]) == 30
+    assert forecast["currency"] == "INR"
     assert forecast["positions"][0]["p10"] is not None
     assert forecast["shortfall_date"] is not None
 
     metrics = client.get(f"/api/batches/{batch_id}/metrics").json()
-    assert metrics["matching"]["precision"] == "0.9890"
+    assert metrics["matching"]["precision"] == "1.0000"
+    assert metrics["matching"]["automation_coverage"] == "0.5625"
     assert Decimal(metrics["forecast_cash_minimum"]) < 0
 
     evaluation = client.get(f"/api/batches/{batch_id}/evaluation").json()
@@ -93,6 +142,49 @@ def test_sse_event_feed_contains_only_actions_evidence_and_outcomes(client: Test
     assert "event: stream_end" in response.text
     assert "chain_of_thought" not in response.text
 
+    snapshot = client.get(
+        f"/api/batches/{batch_id}/events/snapshot", params={"after_sequence": 2}
+    )
+    assert snapshot.status_code == 200
+    assert snapshot.json()["terminal"] is True
+    assert all(item["sequence"] > 2 for item in snapshot.json()["items"])
+    assert snapshot.json()["next_sequence"] >= snapshot.json()["items"][-1]["sequence"]
+
+
+def test_validation_preflight_reports_upload_readiness_and_missing_file_types(
+    client: TestClient,
+) -> None:
+    batch_id = create_demo_batch(client)
+    initial = client.get(f"/api/batches/{batch_id}/validation")
+    assert initial.status_code == 200
+    assert initial.json()["can_run"] is True
+    assert initial.json()["missing_file_types"] == []
+
+    create = client.post(
+        "/api/batches",
+        json={"organization_id": "ORG-TEST", "demo_mode": False, "as_of_date": "2026-09-01"},
+    )
+    batch_id = create.json()["batch_id"]
+
+    content = (
+        b"transaction_id,amount,currency,transaction_date,reference\n"
+        b"BANK-1,100.00,USD,2026-09-01,INV-1\n"
+    )
+    upload = client.post(
+        f"/api/batches/{batch_id}/files",
+        data={"file_type": "bank_transactions"},
+        files={"file": ("bank.csv", content, "text/csv")},
+    )
+    assert upload.status_code == 201
+    preflight = client.get(f"/api/batches/{batch_id}/validation").json()
+    assert preflight["can_run"] is False
+    assert preflight["validation"]["valid"] is False
+    assert set(preflight["missing_file_types"]) == {
+        "invoices",
+        "ledger_entries",
+        "remittances",
+    }
+
 
 def test_csv_upload_reports_schema_problems_before_run(client: TestClient) -> None:
     create = client.post(
@@ -115,6 +207,59 @@ def test_csv_upload_reports_schema_problems_before_run(client: TestClient) -> No
     assert run.json()["batch"]["status"] == "VALIDATION_FAILED"
 
 
+def test_generated_four_file_batch_runs_through_http_and_exposes_all_records(
+    client: TestClient, tmp_path
+) -> None:
+    dataset = generate_dataset(tmp_path / "cashclose-fixture")
+    create = client.post(
+        "/api/batches",
+        json={"organization_id": "ORG-TEST", "demo_mode": False, "as_of_date": "2026-09-01"},
+    )
+    batch_id = create.json()["batch_id"]
+    for file_type in (
+        "bank_transactions",
+        "invoices",
+        "ledger_entries",
+        "remittances",
+    ):
+        path = dataset.input_dir / f"{file_type}.csv"
+        with path.open("rb") as source:
+            response = client.post(
+                f"/api/batches/{batch_id}/files",
+                data={"file_type": file_type},
+                files={"file": (path.name, source, "text/csv")},
+            )
+        assert response.status_code == 201, response.text
+        assert response.json()["validation_issues"] == []
+
+    validation = client.get(f"/api/batches/{batch_id}/validation")
+    assert validation.status_code == 200
+    assert validation.json()["can_run"] is True
+    assert validation.json()["missing_file_types"] == []
+
+    run = client.post(f"/api/batches/{batch_id}/run", json={"horizon_days": 30})
+    assert run.status_code == 200, run.text
+    assert run.json()["batch"]["status"] == "COMPLETED"
+    records = client.get(f"/api/batches/{batch_id}/records")
+    assert records.status_code == 200
+    assert len(records.json()["items"]) == 80
+    assert client.get(f"/api/batches/{batch_id}/matches").json()["proposals"]
+    assert client.get(f"/api/batches/{batch_id}/exceptions").json()["items"]
+
+    # Currency is inferred from the verified base forecast when the UI omits it.
+    scenario = client.post(
+        f"/api/batches/{batch_id}/scenarios",
+        json={
+            "name": "Acme pays seven days late",
+            "action_type": "customer_payment_delay",
+            "customer_name": "Acme",
+            "delay_days": 7,
+        },
+    )
+    assert scenario.status_code == 200, scenario.text
+    assert scenario.json()["currency"] == "INR"
+
+
 def test_exception_can_be_resolved_with_an_explicit_auditable_resolution(
     client: TestClient,
 ) -> None:
@@ -133,6 +278,19 @@ def test_exception_can_be_resolved_with_an_explicit_auditable_resolution(
     assert response.json()["resolved_at"].endswith("Z")
 
 
+def test_exception_can_enter_human_review_queue(client: TestClient) -> None:
+    batch_id = create_demo_batch(client)
+    client.post(f"/api/batches/{batch_id}/run", json={})
+    exception = next(
+        item
+        for item in client.get(f"/api/batches/{batch_id}/exceptions").json()["items"]
+        if item["status"] == "OPEN"
+    )
+    response = client.post(f"/api/exceptions/{exception['exception_id']}/review")
+    assert response.status_code == 200
+    assert response.json()["status"] == "IN_REVIEW"
+
+
 def test_scenario_delays_acme_receipt_without_mutating_base_forecast(client: TestClient) -> None:
     batch_id = create_demo_batch(client)
     client.post(f"/api/batches/{batch_id}/run", json={})
@@ -144,16 +302,175 @@ def test_scenario_delays_acme_receipt_without_mutating_base_forecast(client: Tes
             "action_type": "customer_payment_delay",
             "customer_name": "Acme",
             "delay_days": 7,
-            "currency": "USD",
         },
     )
     assert scenario.status_code == 200, scenario.text
     scenario_body = scenario.json()
     assert scenario_body["scenario"]["delay_days"] == 7
     assert scenario_body["forecast_id"] != base["forecast_id"]
-    assert Decimal(scenario_body["positions"][4]["expected"]) < Decimal(
-        base["positions"][4]["expected"]
+    assert scenario_body["currency"] == "INR"
+    assert any(
+        scenario_position["expected"] != base_position["expected"]
+        for scenario_position, base_position in zip(
+            scenario_body["positions"], base["positions"], strict=True
+        )
     )
+    assert client.get(f"/api/batches/{batch_id}/forecast").json()["forecast_id"] == base[
+        "forecast_id"
+    ]
+    mismatched_currency = client.post(
+        f"/api/batches/{batch_id}/scenarios",
+        json={
+            "name": "Invalid reporting currency",
+            "action_type": "customer_payment_delay",
+            "customer_name": "Acme",
+            "delay_days": 7,
+            "currency": "USD",
+        },
+    )
+    assert mismatched_currency.status_code == 409
+    assert mismatched_currency.json()["error"]["code"] == "GUARDRAIL_REJECTED"
+
+
+def test_payable_delay_scenario_is_strictly_typed(client: TestClient) -> None:
+    batch_id = create_demo_batch(client)
+    client.post(f"/api/batches/{batch_id}/run", json={})
+    response = client.post(
+        f"/api/batches/{batch_id}/scenarios",
+        json={
+            "name": "Delay GST three days",
+            "action_type": "payable_delay",
+            "payable_name": "GST payment",
+            "delay_days": 3,
+        },
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["scenario"]["action_type"] == "payable_delay"
+
+
+def test_one_time_outflow_requires_money_currency_pair(client: TestClient) -> None:
+    batch_id = create_demo_batch(client)
+    client.post(f"/api/batches/{batch_id}/run", json={})
+    missing_currency = client.post(
+        f"/api/batches/{batch_id}/scenarios",
+        json={
+            "name": "Unpriced emergency payment",
+            "action_type": "one_time_outflow",
+            "amount": "250000.00",
+        },
+    )
+    assert missing_currency.status_code == 422
+
+    scenario = client.post(
+        f"/api/batches/{batch_id}/scenarios",
+        json={
+            "name": "Emergency vendor payment",
+            "action_type": "one_time_outflow",
+            "amount": "250000.00",
+            "currency": "INR",
+        },
+    )
+    assert scenario.status_code == 200, scenario.text
+    assert scenario.json()["scenario"]["one_time_outflow"] == "250000.00"
+
+
+def test_review_proposal_can_be_inspected_edited_and_idempotently_approved(
+    client: TestClient,
+) -> None:
+    batch_id = create_demo_batch(client)
+    client.post(f"/api/batches/{batch_id}/run", json={})
+    matches = client.get(f"/api/batches/{batch_id}/matches").json()
+    review = next(
+        item for item in matches["reviews"] if item["proposal"]["status"] == "NEEDS_REVIEW"
+    )
+    assert review["transaction"]["counterparty"]
+    assert review["transaction"]["currency"] == "INR"
+    assert set(review["proposal"]["risk_flags"]).intersection(
+        {"PARTIAL_PAYMENT", "SUSPECTED_FEE"}
+    )
+    assert set(review["allowed_actions"]) == {"edit", "approve", "reject"}
+    proposal = review["proposal"]
+
+    detail = client.get(
+        f"/api/batches/{batch_id}/records/{proposal['transaction_id']}"
+    )
+    assert detail.status_code == 200
+    assert detail.json()["proposal"]["proposal_id"] == proposal["proposal_id"]
+    assert detail.json()["candidates"]
+    assert detail.json()["evidence"]
+
+    edited = client.patch(
+        f"/api/matches/{proposal['proposal_id']}",
+        json={
+            "expected_revision": proposal["revision"],
+            "allocations": proposal["allocations"],
+            "permitted_deduction": proposal["permitted_deduction"],
+            "edit_reason": "Reviewer confirmed the invoice allocation against the ERP record",
+        },
+    )
+    assert edited.status_code == 200, edited.text
+    edited_proposal = edited.json()["proposal"]
+    assert edited_proposal["revision"] == proposal["revision"] + 1
+
+    idempotency_key = f"human:{batch_id}:{proposal['proposal_id']}:approve"
+    approved = client.post(
+        f"/api/matches/{proposal['proposal_id']}/approve",
+        json={
+            "expected_revision": edited_proposal["revision"],
+            "idempotency_key": idempotency_key,
+            "approval_note": "ERP owner confirmed the outstanding receivable",
+        },
+    )
+    assert approved.status_code == 200, approved.text
+    assert approved.json()["proposal"]["status"] == "COMMITTED"
+    assert approved.json()["decision"]["decision"] == "MANUALLY_RECONCILED"
+    assert approved.json()["exception"]["status"] == "RESOLVED"
+
+    replay = client.post(
+        f"/api/matches/{proposal['proposal_id']}/approve",
+        json={
+            "expected_revision": edited_proposal["revision"],
+            "idempotency_key": idempotency_key,
+            "approval_note": "ERP owner confirmed the outstanding receivable",
+        },
+    )
+    assert replay.status_code == 200
+    assert replay.json()["idempotent_replay"] is True
+
+    audit = client.get(f"/api/batches/{batch_id}/audit/download")
+    assert audit.status_code == 200
+    assert audit.headers["content-disposition"].startswith("attachment;")
+    assert any(entry["action"] == "approve_match_review" for entry in audit.json()["entries"])
+
+
+def test_review_proposal_can_be_rejected_with_revision_control(client: TestClient) -> None:
+    batch_id = create_demo_batch(client)
+    client.post(f"/api/batches/{batch_id}/run", json={})
+    review = next(
+        item
+        for item in client.get(f"/api/batches/{batch_id}/matches").json()["reviews"]
+        if item["proposal"]["status"] == "NEEDS_REVIEW"
+    )
+    proposal = review["proposal"]
+    rejected = client.post(
+        f"/api/matches/{proposal['proposal_id']}/reject",
+        json={
+            "expected_revision": proposal["revision"],
+            "rejection_reason": "Customer confirmed the transfer belongs to another entity",
+        },
+    )
+    assert rejected.status_code == 200, rejected.text
+    assert rejected.json()["proposal"]["status"] == "REJECTED"
+    assert rejected.json()["decision"]["decision"] == "REJECTED"
+
+    stale = client.post(
+        f"/api/matches/{proposal['proposal_id']}/reject",
+        json={
+            "expected_revision": proposal["revision"],
+            "rejection_reason": "Duplicate click",
+        },
+    )
+    assert stale.status_code == 409
 
 
 def test_commit_match_is_idempotent_and_rejects_unverified_writes(
@@ -185,42 +502,14 @@ def test_commit_match_is_idempotent_and_rejects_unverified_writes(
     second = fresh.create_batch(
         CreateBatchRequest(as_of_date=date(2026, 9, 1), demo_mode=True)
     )
-    records = fresh.invoke(
-        "get_unprocessed_records",
-        s.GetUnprocessedRecordsInput(batch_id=second.batch_id, limit=10),
-    )
-    assert isinstance(records, s.GetUnprocessedRecordsResult)
-    transaction_id = next(
-        record.record_id for record in records.records if record.record_id.endswith("-0042")
-    )
-    candidates = fresh.invoke(
-        "find_candidate_invoices",
-        s.FindCandidateInvoicesInput(transaction_id=transaction_id),
-    )
-    assert isinstance(candidates, s.FindCandidateInvoicesResult)
-    allocation = fresh.invoke(
-        "solve_payment_allocation",
-        s.SolvePaymentAllocationInput(
-            transaction_id=transaction_id,
-            candidate_invoice_ids=[candidate.invoice_id for candidate in candidates.candidates],
-        ),
-    )
-    assert isinstance(allocation, s.SolvePaymentAllocationResult)
-    evidence = fresh.invoke(
-        "get_match_evidence",
-        s.GetMatchEvidenceInput(
-            transaction_id=transaction_id,
-            candidate_ids=[candidate.invoice_id for candidate in candidates.candidates],
-        ),
-    )
-    assert isinstance(evidence, s.GetMatchEvidenceResult)
+    transaction, allocation, evidence = deterministic_match_inputs(fresh, second.batch_id)
     proposal = fresh.invoke(
         "propose_match",
         s.ProposeMatchInput(
             batch_id=second.batch_id,
-            transaction_id=transaction_id,
-            transaction_amount=Decimal("84250.00"),
-            currency="USD",
+            transaction_id=transaction.record_id,
+            transaction_amount=transaction.amount,
+            currency=transaction.currency,
             allocations=allocation.allocations,
             permitted_deduction=allocation.permitted_deduction,
             confidence=evidence.confidence,
@@ -242,6 +531,9 @@ def test_tool_catalog_hides_evaluator_ground_truth_and_adapter_is_optional() -> 
     assert "commit_match" in names
     assert "compare_with_ground_truth" not in names
     assert "calculate_forecast_metrics" not in names
+    assert "approve_match_review" not in names
+    assert "reject_match_review" not in names
+    assert "edit_match_review" not in names
     assert all(item["strict"] is True for item in responses_tool_definitions())
 
     adapter = OpenAIResponsesAdapter(api_key=None)
@@ -256,30 +548,7 @@ def test_proposal_cannot_replace_stored_transaction_amount_with_model_output(
     service: CashCloseService,
 ) -> None:
     batch = service.create_batch(CreateBatchRequest(as_of_date=date(2026, 9, 1)))
-    records = service.invoke(
-        "get_unprocessed_records",
-        s.GetUnprocessedRecordsInput(batch_id=batch.batch_id, limit=10),
-    )
-    assert isinstance(records, s.GetUnprocessedRecordsResult)
-    transaction = next(item for item in records.records if item.record_id.endswith("-0042"))
-    candidates = service.invoke(
-        "find_candidate_invoices",
-        s.FindCandidateInvoicesInput(transaction_id=transaction.record_id),
-    )
-    assert isinstance(candidates, s.FindCandidateInvoicesResult)
-    ids = [candidate.invoice_id for candidate in candidates.candidates]
-    allocation = service.invoke(
-        "solve_payment_allocation",
-        s.SolvePaymentAllocationInput(
-            transaction_id=transaction.record_id, candidate_invoice_ids=ids
-        ),
-    )
-    evidence = service.invoke(
-        "get_match_evidence",
-        s.GetMatchEvidenceInput(transaction_id=transaction.record_id, candidate_ids=ids),
-    )
-    assert isinstance(allocation, s.SolvePaymentAllocationResult)
-    assert isinstance(evidence, s.GetMatchEvidenceResult)
+    transaction, allocation, evidence = deterministic_match_inputs(service, batch.batch_id)
 
     with pytest.raises(GuardrailError, match="stored transaction"):
         service.invoke(
@@ -287,8 +556,8 @@ def test_proposal_cannot_replace_stored_transaction_amount_with_model_output(
             s.ProposeMatchInput(
                 batch_id=batch.batch_id,
                 transaction_id=transaction.record_id,
-                transaction_amount=Decimal("84249.00"),
-                currency="USD",
+                transaction_amount=transaction.amount - Decimal("1.00"),
+                currency=transaction.currency,
                 allocations=allocation.allocations,
                 permitted_deduction=allocation.permitted_deduction,
                 confidence=evidence.confidence,
@@ -304,6 +573,20 @@ def test_http_models_reject_unknown_fields(client: TestClient) -> None:
         json={"organization_id": "ORG-TEST", "demo_mode": True, "invented": "field"},
     )
     assert response.status_code == 422
+
+
+def test_browser_cors_preflight_allows_review_patch_and_bearer_auth(client: TestClient) -> None:
+    response = client.options(
+        "/api/matches/MP-TEST",
+        headers={
+            "Origin": "http://localhost:3000",
+            "Access-Control-Request-Method": "PATCH",
+            "Access-Control-Request-Headers": "authorization,content-type",
+        },
+    )
+    assert response.status_code == 200
+    assert "PATCH" in response.headers["access-control-allow-methods"]
+    assert "Authorization" in response.headers["access-control-allow-headers"]
 
 
 def test_two_demo_batches_keep_financial_records_and_writes_isolated(

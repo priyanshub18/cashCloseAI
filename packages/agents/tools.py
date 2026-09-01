@@ -68,6 +68,9 @@ _CONTRACT_LIST = [
     _tool("list_related_exceptions", "List exceptions associated with a record.", s.ListRelatedExceptionsInput, s.ListRelatedExceptionsResult),
     _tool("request_human_review", "Move an exception into the human-review queue.", s.RequestHumanReviewInput, s.ExceptionMutationResult, side_effecting=True),
     _tool("resolve_exception", "Resolve an exception using an explicit human resolution.", s.ResolveExceptionInput, s.ExceptionMutationResult, side_effecting=True),
+    _tool("edit_match_review", "Apply a human allocation edit after deterministic validation.", s.EditMatchInput, s.EditMatchResult, side_effecting=True, agent_visible=False),
+    _tool("approve_match_review", "Commit a human-reviewed proposal with an idempotency key.", s.ApproveMatchInput, s.HumanReviewResult, side_effecting=True, agent_visible=False),
+    _tool("reject_match_review", "Reject a proposal and terminalize its review record.", s.RejectMatchInput, s.HumanReviewResult, side_effecting=True, agent_visible=False),
     _tool("calculate_verified_cash", "Calculate cash exclusively from verified stored values.", s.CalculateVerifiedCashInput, s.CalculateVerifiedCashResult),
     _tool("get_expected_receivables", "Return receivables for a bounded date range.", s.ExpectedReceivablesInput, s.CashFlowListResult),
     _tool("get_committed_payables", "Return committed payables for a bounded date range.", s.CommittedPayablesInput, s.CashFlowListResult),
@@ -140,4 +143,3 @@ def validate_tool_output(tool_name: str, result: BaseModel | dict[str, Any]) -> 
         return result
     payload = result.model_dump() if isinstance(result, BaseModel) else result
     return contract.output_model.model_validate(payload)
-

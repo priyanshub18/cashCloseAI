@@ -58,6 +58,7 @@ class RecordStatus(StrEnum):
     CANDIDATES_FOUND = "CANDIDATES_FOUND"
     PROPOSED = "PROPOSED"
     AUTO_RECONCILED = "AUTO_RECONCILED"
+    MANUALLY_RECONCILED = "MANUALLY_RECONCILED"
     NEEDS_REVIEW = "NEEDS_REVIEW"
     UNRESOLVED = "UNRESOLVED"
     REJECTED = "REJECTED"
@@ -73,12 +74,14 @@ class FileKind(StrEnum):
 class ProposalStatus(StrEnum):
     PROPOSED = "PROPOSED"
     VERIFIED = "VERIFIED"
+    NEEDS_REVIEW = "NEEDS_REVIEW"
     REJECTED = "REJECTED"
     COMMITTED = "COMMITTED"
 
 
 class Decision(StrEnum):
     AUTO_RECONCILED = "AUTO_RECONCILED"
+    MANUALLY_RECONCILED = "MANUALLY_RECONCILED"
     NEEDS_REVIEW = "NEEDS_REVIEW"
     UNRESOLVED = "UNRESOLVED"
     REJECTED = "REJECTED"
@@ -107,6 +110,9 @@ class ExceptionReason(StrEnum):
     CURRENCY_MISMATCH = "CURRENCY_MISMATCH"
     SUSPECTED_FEE = "SUSPECTED_FEE"
     SUSPECTED_WITHHOLDING = "SUSPECTED_WITHHOLDING"
+    OVERPAYMENT = "OVERPAYMENT"
+    UNRECONCILABLE = "UNRECONCILABLE"
+    MISSING_REMITTANCE = "MISSING_REMITTANCE"
     INVALID_RECORD = "INVALID_RECORD"
     INSUFFICIENT_EVIDENCE = "INSUFFICIENT_EVIDENCE"
 
@@ -148,7 +154,9 @@ class MatchProposal(StrictSchema):
     evidence: list[EvidenceItem] = Field(min_length=1, max_length=50)
     risk_flags: list[Annotated[str, Field(min_length=2, max_length=100)]] = Field(default_factory=list, max_length=30)
     status: ProposalStatus = ProposalStatus.PROPOSED
+    revision: int = Field(default=1, ge=1)
     created_at: datetime
+    updated_at: datetime | None = None
 
     @model_validator(mode="after")
     def validate_financial_invariants(self) -> "MatchProposal":
@@ -432,6 +440,7 @@ class ExceptionRecord(StrictSchema):
     exception_id: Identifier
     batch_id: Identifier
     record_id: Identifier
+    proposal_id: Identifier | None = None
     reason_code: ExceptionReason
     evidence: list[EvidenceItem]
     next_action: str
@@ -439,6 +448,11 @@ class ExceptionRecord(StrictSchema):
     created_at: datetime
     resolved_at: datetime | None = None
     resolution: str | None = None
+    amount: Money | None = None
+    currency: CurrencyCode | None = None
+    counterparty: str | None = Field(default=None, max_length=200)
+    reference: str | None = Field(default=None, max_length=500)
+    candidate_invoices: list[CandidateInvoice] = Field(default_factory=list, max_length=100)
 
 
 class CreateExceptionResult(StrictSchema):
@@ -464,6 +478,47 @@ class ResolveExceptionInput(StrictSchema):
 
 class ExceptionMutationResult(StrictSchema):
     exception: ExceptionRecord
+
+
+class EditMatchInput(StrictSchema):
+    proposal_id: Identifier
+    expected_revision: int = Field(ge=1)
+    allocations: list[Allocation] = Field(min_length=1, max_length=100)
+    permitted_deduction: Money = Field(default=Decimal("0.00"), ge=Decimal("0"))
+    edit_reason: Annotated[str, Field(min_length=3, max_length=500)]
+
+
+class EditMatchResult(StrictSchema):
+    proposal: MatchProposal
+    verification: VerificationResult
+
+
+class ApproveMatchInput(StrictSchema):
+    proposal_id: Identifier
+    expected_revision: int = Field(ge=1)
+    idempotency_key: Annotated[
+        str,
+        StringConstraints(
+            strip_whitespace=True,
+            min_length=12,
+            max_length=128,
+            pattern=r"^[A-Za-z0-9._:-]+$",
+        ),
+    ]
+    approval_note: Annotated[str, Field(min_length=3, max_length=500)]
+
+
+class RejectMatchInput(StrictSchema):
+    proposal_id: Identifier
+    expected_revision: int = Field(ge=1)
+    rejection_reason: Annotated[str, Field(min_length=3, max_length=500)]
+
+
+class HumanReviewResult(StrictSchema):
+    proposal: MatchProposal
+    decision: ReconciliationDecision | None = None
+    exception: ExceptionRecord | None = None
+    idempotent_replay: bool = False
 
 
 class CalculateVerifiedCashInput(StrictSchema):
@@ -514,7 +569,11 @@ class CashFlowListResult(StrictSchema):
 
 class ScenarioParameters(StrictSchema):
     scenario_name: Annotated[str, Field(min_length=1, max_length=100)] = "base"
+    action_type: Literal[
+        "base", "customer_payment_delay", "payable_delay", "one_time_outflow"
+    ] = "base"
     customer_name: str | None = Field(default=None, max_length=200)
+    payable_name: str | None = Field(default=None, max_length=200)
     delay_days: int = Field(default=0, ge=0, le=90)
     one_time_outflow: Money = Field(default=Decimal("0.00"), ge=Decimal("0"))
     currency: CurrencyCode = "USD"
@@ -657,4 +716,3 @@ class ControllerRunResult(StrictSchema):
     exceptions_created: int = Field(ge=0)
     forecast_id: Identifier | None = None
     report_id: Identifier | None = None
-

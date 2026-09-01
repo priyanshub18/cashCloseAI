@@ -8,18 +8,25 @@ from collections.abc import AsyncIterator
 
 from fastapi import FastAPI, File, Form, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 
 from packages.agents import schemas as agent_schemas
 from packages.agents.openai_adapter import OpenAIAdapterNotConfigured
 
 from .schemas import (
     BatchMetricsView,
+    BatchValidationView,
     BatchView,
+    AgentEventPage,
+    ApproveMatchRequest,
     CreateBatchRequest,
     EvaluationView,
+    EditMatchRequest,
     ExceptionList,
     MatchList,
+    RecordDetailView,
+    RecordList,
+    RejectMatchRequest,
     ResolveExceptionRequest,
     RunBatchRequest,
     RunBatchResponse,
@@ -50,8 +57,8 @@ def create_app(service: CashCloseService | None = None) -> FastAPI:
         CORSMiddleware,
         allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
         allow_credentials=True,
-        allow_methods=["GET", "POST", "OPTIONS"],
-        allow_headers=["Content-Type", "Last-Event-ID"],
+        allow_methods=["GET", "POST", "PATCH", "OPTIONS"],
+        allow_headers=["Accept", "Authorization", "Content-Type", "Last-Event-ID"],
     )
 
     @application.exception_handler(NotFoundError)
@@ -128,8 +135,17 @@ def create_app(service: CashCloseService | None = None) -> FastAPI:
     def get_batch(batch_id: str) -> BatchView:
         return _service(application).get_batch(batch_id)
 
+    @application.get(
+        "/api/batches/{batch_id}/validation",
+        response_model=BatchValidationView,
+        tags=["batches"],
+    )
+    def get_batch_validation(batch_id: str) -> BatchValidationView:
+        return _service(application).get_validation(batch_id)
+
     @application.get("/api/batches/{batch_id}/events", tags=["batches"])
     async def stream_batch_events(
+        request: Request,
         batch_id: str,
         after_sequence: int = Query(default=0, ge=0),
         follow: bool = Query(default=False),
@@ -137,6 +153,9 @@ def create_app(service: CashCloseService | None = None) -> FastAPI:
         # Resolve the batch before returning a streaming response so 404s retain a
         # normal JSON error body instead of surfacing inside the stream iterator.
         _service(application).get_batch(batch_id)
+        last_event_id = request.headers.get("last-event-id")
+        if last_event_id and last_event_id.isdigit():
+            after_sequence = max(after_sequence, int(last_event_id))
         return StreamingResponse(
             _event_stream(
                 _service(application),
@@ -151,6 +170,33 @@ def create_app(service: CashCloseService | None = None) -> FastAPI:
                 "X-Accel-Buffering": "no",
             },
         )
+
+    @application.get(
+        "/api/batches/{batch_id}/events/snapshot",
+        response_model=AgentEventPage,
+        tags=["batches"],
+    )
+    def get_batch_event_snapshot(
+        batch_id: str,
+        after_sequence: int = Query(default=0, ge=0),
+    ) -> AgentEventPage:
+        return _service(application).event_page(batch_id, after_sequence)
+
+    @application.get(
+        "/api/batches/{batch_id}/records",
+        response_model=RecordList,
+        tags=["reconciliation"],
+    )
+    def get_records(batch_id: str) -> RecordList:
+        return _service(application).list_records(batch_id)
+
+    @application.get(
+        "/api/batches/{batch_id}/records/{record_id}",
+        response_model=RecordDetailView,
+        tags=["reconciliation"],
+    )
+    def get_record(batch_id: str, record_id: str) -> RecordDetailView:
+        return _service(application).get_record_detail(batch_id, record_id)
 
     @application.get(
         "/api/batches/{batch_id}/metrics",
@@ -173,6 +219,44 @@ def create_app(service: CashCloseService | None = None) -> FastAPI:
     )
     def get_exceptions(batch_id: str) -> ExceptionList:
         return _service(application).list_exceptions(batch_id)
+
+    @application.patch(
+        "/api/matches/{proposal_id}",
+        response_model=agent_schemas.EditMatchResult,
+        tags=["reconciliation"],
+    )
+    def edit_match(
+        proposal_id: str, payload: EditMatchRequest
+    ) -> agent_schemas.EditMatchResult:
+        return _service(application).edit_match(proposal_id, payload)
+
+    @application.post(
+        "/api/matches/{proposal_id}/approve",
+        response_model=agent_schemas.HumanReviewResult,
+        tags=["reconciliation"],
+    )
+    def approve_match(
+        proposal_id: str, payload: ApproveMatchRequest
+    ) -> agent_schemas.HumanReviewResult:
+        return _service(application).approve_match(proposal_id, payload)
+
+    @application.post(
+        "/api/matches/{proposal_id}/reject",
+        response_model=agent_schemas.HumanReviewResult,
+        tags=["reconciliation"],
+    )
+    def reject_match(
+        proposal_id: str, payload: RejectMatchRequest
+    ) -> agent_schemas.HumanReviewResult:
+        return _service(application).reject_match(proposal_id, payload)
+
+    @application.post(
+        "/api/exceptions/{exception_id}/review",
+        response_model=agent_schemas.ExceptionRecord,
+        tags=["reconciliation"],
+    )
+    def request_exception_review(exception_id: str) -> agent_schemas.ExceptionRecord:
+        return _service(application).request_exception_review(exception_id)
 
     @application.post(
         "/api/exceptions/{exception_id}/resolve",
@@ -209,6 +293,22 @@ def create_app(service: CashCloseService | None = None) -> FastAPI:
     )
     def get_audit(batch_id: str) -> agent_schemas.AuditReportResult:
         return _service(application).get_audit(batch_id)
+
+    @application.get(
+        "/api/batches/{batch_id}/audit/download",
+        tags=["evaluation"],
+    )
+    def download_audit(batch_id: str) -> Response:
+        report = _service(application).get_audit(batch_id)
+        return Response(
+            content=report.model_dump_json(indent=2),
+            media_type="application/json",
+            headers={
+                "Content-Disposition": (
+                    f'attachment; filename="cashclose-audit-{batch_id}.json"'
+                )
+            },
+        )
 
     @application.get(
         "/api/batches/{batch_id}/evaluation",
@@ -259,4 +359,3 @@ async def _event_stream(
 
 
 app = create_app()
-

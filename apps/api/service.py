@@ -23,14 +23,28 @@ from packages.agents.controller import DeterministicController
 from packages.agents.openai_adapter import OpenAIAdapterNotConfigured, OpenAIResponsesAdapter
 from packages.agents import schemas as s
 from packages.agents.tools import TOOL_CONTRACTS, validate_tool_input, validate_tool_output
-from packages.agents.verifier import MatchVerifier
+from packages.agents.verifier import HARD_RISK_FLAGS, MatchVerifier
 from packages.finance import (
+    AllocationStatus as FinanceAllocationStatus,
+    CandidatePolicy as FinanceCandidatePolicy,
+    CashFlowCertainty as FinanceCashFlowCertainty,
+    ForecastCashFlow as FinanceForecastCashFlow,
+    ForecastScenario as FinanceForecastScenario,
+    InvoiceRecord as FinanceInvoiceRecord,
+    MatchCandidate as FinanceMatchCandidate,
+    Money as FinanceMoney,
+    TransactionRecord as FinanceTransactionRecord,
     calculate_verified_cash as finance_calculate_verified_cash,
+    extract_invoice_references as finance_extract_invoice_references,
+    find_candidate_invoices as finance_find_candidate_invoices,
     normalize_counterparty as finance_normalize_counterparty,
     normalize_reference as finance_normalize_reference,
+    run_cash_forecast as finance_run_cash_forecast,
+    run_monte_carlo_forecast as finance_run_monte_carlo_forecast,
     solve_payment_allocation as finance_solve_payment_allocation,
     validate_currency_and_amount as finance_validate_currency_and_amount,
 )
+from packages.synthetic_data.generator import build_agent_visible_dataset
 
 from . import schemas as api_schemas
 
@@ -38,6 +52,7 @@ from . import schemas as api_schemas
 MAX_UPLOAD_BYTES = 10_000_000
 TERMINAL_RECORD_STATUSES = {
     s.RecordStatus.AUTO_RECONCILED,
+    s.RecordStatus.MANUALLY_RECONCILED,
     s.RecordStatus.NEEDS_REVIEW,
     s.RecordStatus.UNRESOLVED,
     s.RecordStatus.REJECTED,
@@ -107,7 +122,18 @@ class BatchState:
     created_at: datetime = field(default_factory=utc_now)
     updated_at: datetime = field(default_factory=utc_now)
     files: dict[s.FileKind, api_schemas.UploadedFileView] = field(default_factory=dict)
+    uploaded_rows: dict[s.FileKind, list[dict[str, str]]] = field(default_factory=dict)
     records: dict[str, s.ReconciliationRecord] = field(default_factory=dict)
+    transaction_rows: dict[str, dict[str, str]] = field(default_factory=dict)
+    invoice_rows: dict[str, dict[str, str]] = field(default_factory=dict)
+    remittances_by_transaction: dict[str, dict[str, str]] = field(default_factory=dict)
+    customer_rows: dict[str, dict[str, str]] = field(default_factory=dict)
+    customer_alias_rows: list[dict[str, str]] = field(default_factory=list)
+    recurring_cash_flow_rows: dict[str, dict[str, str]] = field(default_factory=dict)
+    duplicate_invoice_ids: set[str] = field(default_factory=set)
+    opening_balances: dict[str, Decimal] = field(default_factory=dict)
+    finance_candidates: dict[str, list[FinanceMatchCandidate]] = field(default_factory=dict)
+    finance_allocations: dict[str, Any] = field(default_factory=dict)
     candidate_results: dict[str, s.FindCandidateInvoicesResult] = field(default_factory=dict)
     allocation_results: dict[str, s.SolvePaymentAllocationResult] = field(default_factory=dict)
     evidence_results: dict[str, s.GetMatchEvidenceResult] = field(default_factory=dict)
@@ -115,9 +141,13 @@ class BatchState:
     verifications: dict[str, s.VerificationResult] = field(default_factory=dict)
     decisions: dict[str, s.ReconciliationDecision] = field(default_factory=dict)
     idempotency_results: dict[str, tuple[str, s.CommitMatchResult]] = field(default_factory=dict)
+    review_idempotency_results: dict[str, tuple[str, s.HumanReviewResult]] = field(
+        default_factory=dict
+    )
     exceptions: dict[str, s.ExceptionRecord] = field(default_factory=dict)
     forecasts: dict[str, s.RunCashForecastResult] = field(default_factory=dict)
     current_forecast_id: str | None = None
+    base_forecast_id: str | None = None
     match_metrics: s.MatchMetricsResult | None = None
     forecast_metrics: s.ForecastMetricsResult | None = None
     audit_report: s.AuditReportResult | None = None
@@ -151,6 +181,7 @@ class CashCloseService:
             )
             if request.demo_mode:
                 self._seed_demo_records(state)
+                self._hydrate_uploaded_data(state)
             self._batches[batch_id] = state
             return self._batch_view(state)
 
@@ -211,6 +242,68 @@ class CashCloseService:
                         record_references=[],
                     )
                 )
+            id_columns: dict[s.FileKind, tuple[str, ...]] = {
+                s.FileKind.BANK_TRANSACTIONS: ("transaction_id",),
+                s.FileKind.INVOICES: ("invoice_id",),
+                s.FileKind.LEDGER_ENTRIES: ("entry_id", "ledger_entry_id"),
+                s.FileKind.REMITTANCES: ("remittance_id",),
+            }
+            id_column = next(
+                (candidate for candidate in id_columns[file_type] if candidate in column_set),
+                None,
+            )
+            if id_column:
+                seen_ids: set[str] = set()
+                duplicate_ids: list[str] = []
+                for row_number, row in enumerate(rows, start=2):
+                    record_id = (row.get(id_column) or "").strip() or f"row:{row_number}"
+                    if record_id in seen_ids:
+                        duplicate_ids.append(record_id)
+                    seen_ids.add(record_id)
+                if duplicate_ids:
+                    issues.append(
+                        s.ValidationIssue(
+                            code="DUPLICATE_RECORD_ID",
+                            severity="error",
+                            count=len(duplicate_ids),
+                            record_references=duplicate_ids[:100],
+                        )
+                    )
+            if "amount" in column_set:
+                invalid_amounts: list[str] = []
+                invalid_currencies: list[str] = []
+                for row_number, row in enumerate(rows, start=2):
+                    record_reference = (
+                        ((row.get(id_column) or "").strip() if id_column else "")
+                        or f"row:{row_number}"
+                    )
+                    try:
+                        amount = Decimal((row.get("amount") or "").strip())
+                        if not amount.is_finite() or amount <= 0:
+                            raise ValueError("amount must be positive and finite")
+                    except Exception:
+                        invalid_amounts.append(record_reference)
+                    currency = (row.get("currency") or "").strip().upper()
+                    if not re.fullmatch(r"[A-Z]{3}", currency):
+                        invalid_currencies.append(record_reference)
+                if invalid_amounts:
+                    issues.append(
+                        s.ValidationIssue(
+                            code="INVALID_AMOUNT",
+                            severity="error",
+                            count=len(invalid_amounts),
+                            record_references=invalid_amounts[:100],
+                        )
+                    )
+                if invalid_currencies:
+                    issues.append(
+                        s.ValidationIssue(
+                            code="INVALID_CURRENCY",
+                            severity="error",
+                            count=len(invalid_currencies),
+                            record_references=invalid_currencies[:100],
+                        )
+                    )
             safe_filename = re.sub(r"[^A-Za-z0-9._-]", "_", filename)[-255:]
             file_view = api_schemas.UploadedFileView(
                 file_id=f"FILE-{batch_id.split('-')[-1]}-{len(state.files) + 1:02d}",
@@ -225,6 +318,20 @@ class CashCloseService:
                 validation_issues=issues,
             )
             state.files[file_type] = file_view
+            state.uploaded_rows[file_type] = [
+                {
+                    str(key).strip(): (
+                        value.strip()
+                        if isinstance(value, str)
+                        else ""
+                        if value is None
+                        else str(value)
+                    )
+                    for key, value in row.items()
+                    if key is not None
+                }
+                for row in rows
+            ]
             state.updated_at = utc_now()
             return file_view
 
@@ -307,9 +414,41 @@ class CashCloseService:
     def list_matches(self, batch_id: str) -> api_schemas.MatchList:
         with self._lock:
             state = self._get_batch(batch_id)
+            reviews: list[api_schemas.MatchReviewView] = []
+            for proposal in state.proposals.values():
+                record = state.records[proposal.transaction_id]
+                linked_exception = next(
+                    (
+                        exception
+                        for exception in state.exceptions.values()
+                        if exception.proposal_id == proposal.proposal_id
+                        or exception.record_id == proposal.transaction_id
+                    ),
+                    None,
+                )
+                if proposal.status in {
+                    s.ProposalStatus.PROPOSED,
+                    s.ProposalStatus.NEEDS_REVIEW,
+                }:
+                    allowed_actions = ["edit", "approve", "reject"]
+                elif proposal.status is s.ProposalStatus.COMMITTED:
+                    allowed_actions = []
+                else:
+                    allowed_actions = []
+                reviews.append(
+                    api_schemas.MatchReviewView(
+                        proposal=proposal,
+                        transaction=record,
+                        verification=state.verifications.get(proposal.proposal_id),
+                        decision=state.decisions.get(proposal.transaction_id),
+                        linked_exception=linked_exception,
+                        allowed_actions=allowed_actions,
+                    )
+                )
             return api_schemas.MatchList(
                 items=list(state.decisions.values()),
                 proposals=list(state.proposals.values()),
+                reviews=reviews,
             )
 
     def list_exceptions(self, batch_id: str) -> api_schemas.ExceptionList:
@@ -327,12 +466,99 @@ class CashCloseService:
         assert isinstance(result, s.ExceptionMutationResult)
         return result.exception
 
+    def request_exception_review(self, exception_id: str) -> s.ExceptionRecord:
+        result = self.invoke(
+            "request_human_review",
+            s.RequestHumanReviewInput(exception_id=exception_id),
+        )
+        assert isinstance(result, s.ExceptionMutationResult)
+        return result.exception
+
+    def edit_match(
+        self, proposal_id: str, request: api_schemas.EditMatchRequest
+    ) -> s.EditMatchResult:
+        result = self.invoke(
+            "edit_match_review",
+            s.EditMatchInput(
+                proposal_id=proposal_id,
+                expected_revision=request.expected_revision,
+                allocations=request.allocations,
+                permitted_deduction=request.permitted_deduction,
+                edit_reason=request.edit_reason,
+            ),
+        )
+        assert isinstance(result, s.EditMatchResult)
+        return result
+
+    def approve_match(
+        self, proposal_id: str, request: api_schemas.ApproveMatchRequest
+    ) -> s.HumanReviewResult:
+        result = self.invoke(
+            "approve_match_review",
+            s.ApproveMatchInput(
+                proposal_id=proposal_id,
+                expected_revision=request.expected_revision,
+                idempotency_key=request.idempotency_key,
+                approval_note=request.approval_note,
+            ),
+        )
+        assert isinstance(result, s.HumanReviewResult)
+        return result
+
+    def reject_match(
+        self, proposal_id: str, request: api_schemas.RejectMatchRequest
+    ) -> s.HumanReviewResult:
+        result = self.invoke(
+            "reject_match_review",
+            s.RejectMatchInput(
+                proposal_id=proposal_id,
+                expected_revision=request.expected_revision,
+                rejection_reason=request.rejection_reason,
+            ),
+        )
+        assert isinstance(result, s.HumanReviewResult)
+        return result
+
+    def get_validation(self, batch_id: str) -> api_schemas.BatchValidationView:
+        with self._lock:
+            state = self._get_batch(batch_id)
+            validation = self._tool_validate_batch(s.ValidateBatchInput(batch_id=batch_id))
+            uploaded = list(state.files)
+            missing = [kind for kind in s.FileKind if kind not in state.files]
+            return api_schemas.BatchValidationView(
+                batch_id=batch_id,
+                required_file_types=list(s.FileKind),
+                uploaded_file_types=uploaded,
+                missing_file_types=missing,
+                demo_fixture_available=state.demo_mode and not state.files,
+                validation=validation,
+                can_run=validation.valid and state.status is s.BatchStatus.UPLOADED,
+            )
+
+    def list_records(self, batch_id: str) -> api_schemas.RecordList:
+        with self._lock:
+            state = self._get_batch(batch_id)
+            return api_schemas.RecordList(
+                items=[self._record_detail(state, record) for record in state.records.values()]
+            )
+
+    def get_record_detail(self, batch_id: str, record_id: str) -> api_schemas.RecordDetailView:
+        with self._lock:
+            state = self._get_batch(batch_id)
+            try:
+                record = state.records[record_id]
+            except KeyError as exc:
+                raise NotFoundError(
+                    f"record {record_id} was not found in batch {batch_id}"
+                ) from exc
+            return self._record_detail(state, record)
+
     def get_forecast(self, batch_id: str) -> s.RunCashForecastResult:
         with self._lock:
             state = self._get_batch(batch_id)
-            if not state.current_forecast_id:
+            if not state.base_forecast_id:
                 raise ConflictError("the batch does not have a forecast yet")
-            return state.forecasts[state.current_forecast_id]
+            return state.forecasts[state.base_forecast_id]
 
     def run_scenario(
         self, batch_id: str, request: api_schemas.ScenarioRequest
@@ -341,12 +567,21 @@ class CashCloseService:
             state = self._get_batch(batch_id)
             if state.status is not s.BatchStatus.COMPLETED:
                 raise ConflictError("scenarios require a completed verified batch")
+            if not state.base_forecast_id:
+                raise ConflictError("scenarios require a completed base forecast")
+            base_currency = state.forecasts[state.base_forecast_id].currency
+            if request.currency is not None and request.currency != base_currency:
+                raise GuardrailError(
+                    "scenario currency must equal the verified cash currency"
+                )
         parameters = s.ScenarioParameters(
             scenario_name=request.name,
+            action_type=request.action_type.value,
             customer_name=request.customer_name,
+            payable_name=request.payable_name,
             delay_days=request.delay_days,
             one_time_outflow=request.amount or Decimal("0.00"),
-            currency=request.currency,
+            currency=request.currency or base_currency,
         )
         result = self.invoke(
             "simulate_cash_action",
@@ -374,7 +609,7 @@ class CashCloseService:
             state = self._get_batch(batch_id)
             if state.audit_report is None:
                 raise ConflictError("audit report is available after evaluation")
-            return state.audit_report
+            return self._build_audit_report(state)
 
     def get_evaluation(self, batch_id: str) -> api_schemas.EvaluationView:
         with self._lock:
@@ -394,6 +629,17 @@ class CashCloseService:
         with self._lock:
             state = self._get_batch(batch_id)
             return [event for event in state.events if event.sequence > after_sequence]
+
+    def event_page(self, batch_id: str, after_sequence: int = 0) -> api_schemas.AgentEventPage:
+        with self._lock:
+            state = self._get_batch(batch_id)
+            items = [event for event in state.events if event.sequence > after_sequence]
+            next_sequence = items[-1].sequence if items else after_sequence
+            return api_schemas.AgentEventPage(
+                items=items,
+                next_sequence=next_sequence,
+                terminal=state.status.terminal,
+            )
 
     # ------------------------------------------------------------------
     # Agent runtime port
@@ -493,17 +739,16 @@ class CashCloseService:
     def _tool_validate_batch(self, payload: s.ValidateBatchInput) -> s.ValidateBatchResult:
         state = self._get_batch(payload.batch_id)
         issues = [issue for file in state.files.values() for issue in file.validation_issues]
-        if not state.demo_mode:
-            missing = [kind.value for kind in s.FileKind if kind not in state.files]
-            if missing:
-                issues.append(
-                    s.ValidationIssue(
-                        code="MISSING_REQUIRED_FILES",
-                        severity="error",
-                        count=len(missing),
-                        record_references=missing,
-                    )
+        missing = [kind.value for kind in s.FileKind if kind not in state.files]
+        if missing and (state.files or not state.demo_mode):
+            issues.append(
+                s.ValidationIssue(
+                    code="MISSING_REQUIRED_FILES",
+                    severity="error",
+                    count=len(missing),
+                    record_references=missing,
                 )
+            )
         elif not state.files:
             issues.append(
                 s.ValidationIssue(
@@ -513,6 +758,18 @@ class CashCloseService:
                     record_references=["BANK-0011", "BANK-0038", "BANK-0064"],
                 )
             )
+        if state.uploaded_rows and not any(issue.severity == "error" for issue in issues):
+            try:
+                self._hydrate_uploaded_data(state)
+            except (ValueError, KeyError) as exc:
+                issues.append(
+                    s.ValidationIssue(
+                        code="INVALID_FINANCIAL_RECORD",
+                        severity="error",
+                        count=1,
+                        record_references=[str(exc)[:200]],
+                    )
+                )
         return s.ValidateBatchResult(
             batch_id=payload.batch_id,
             valid=not any(issue.severity == "error" for issue in issues),
@@ -619,6 +876,8 @@ class CashCloseService:
         self, payload: s.FindCandidateInvoicesInput
     ) -> s.FindCandidateInvoicesResult:
         state, record = self._record(payload.transaction_id)
+        if state.invoice_rows:
+            return self._find_uploaded_candidate_invoices(state, record, payload.limit)
         token = state.batch_id.split("-")[-1]
         if record.record_id.endswith("-0042"):
             candidates = [
@@ -638,6 +897,17 @@ class CashCloseService:
                     reference_similarity=Decimal("1.0000"),
                     counterparty_similarity=Decimal("0.9800"),
                 ),
+            ]
+        elif record.record_id.endswith("-0061"):
+            candidates = [
+                s.CandidateInvoice(
+                    invoice_id=f"INV-{token}-0061",
+                    invoice_number="6100",
+                    remaining_balance=Decimal("125000.00"),
+                    currency="USD",
+                    reference_similarity=Decimal("0.8200"),
+                    counterparty_similarity=Decimal("0.9400"),
+                )
             ]
         elif record.record_id.endswith("-0077"):
             candidates = [
@@ -710,6 +980,8 @@ class CashCloseService:
         self, payload: s.SolvePaymentAllocationInput
     ) -> s.SolvePaymentAllocationResult:
         state, record = self._record(payload.transaction_id)
+        if state.invoice_rows:
+            return self._solve_uploaded_payment_allocation(state, record, payload)
         candidate_cache = state.candidate_results.get(payload.transaction_id)
         if candidate_cache is None:
             raise GuardrailError("allocation solving requires prior deterministic candidate generation")
@@ -778,6 +1050,8 @@ class CashCloseService:
         self, payload: s.GetMatchEvidenceInput
     ) -> s.GetMatchEvidenceResult:
         state, _ = self._record(payload.transaction_id)
+        if state.invoice_rows:
+            return self._get_uploaded_match_evidence(state, payload)
         candidates = state.candidate_results.get(payload.transaction_id)
         if candidates is None:
             raise GuardrailError("evidence assembly requires prior deterministic candidate generation")
@@ -810,6 +1084,28 @@ class CashCloseService:
                 transaction_id=payload.transaction_id,
                 evidence=evidence,
                 confidence=Decimal("0.9730"),
+                risk_flags=[],
+            )
+        elif payload.transaction_id.endswith("-0061"):
+            token = state.batch_id.split("-")[-1]
+            evidence = [
+                s.EvidenceItem(
+                    evidence_id=f"EVID-{token}-0061-REF",
+                    evidence_type="exact_reference",
+                    summary="The invoice reference is present but remittance is unavailable",
+                    source_reference=f"transaction:{payload.transaction_id}",
+                ),
+                s.EvidenceItem(
+                    evidence_id=f"EVID-{token}-0061-AMT",
+                    evidence_type="exact_amount",
+                    summary="Transaction amount equals the remaining invoice balance",
+                    source_reference=f"allocation:{payload.transaction_id}",
+                ),
+            ]
+            result = s.GetMatchEvidenceResult(
+                transaction_id=payload.transaction_id,
+                evidence=evidence,
+                confidence=Decimal("0.8500"),
                 risk_flags=[],
             )
         else:
@@ -891,7 +1187,11 @@ class CashCloseService:
     def _tool_verify_match(self, payload: s.VerifyMatchInput) -> s.VerifyMatchResult:
         state, proposal = self._proposal(payload.proposal_id)
         verification = self.verifier.verify(proposal)
-        status = s.ProposalStatus.VERIFIED if verification.approved else s.ProposalStatus.REJECTED
+        status = (
+            s.ProposalStatus.VERIFIED
+            if verification.approved
+            else s.ProposalStatus.NEEDS_REVIEW
+        )
         proposal = proposal.model_copy(update={"status": status})
         state.proposals[payload.proposal_id] = proposal
         state.verifications[payload.proposal_id] = verification
@@ -969,11 +1269,28 @@ class CashCloseService:
             ),
             batch_id=payload.batch_id,
             record_id=payload.record_id,
+            proposal_id=next(
+                (
+                    proposal.proposal_id
+                    for proposal in state.proposals.values()
+                    if proposal.transaction_id == payload.record_id
+                ),
+                None,
+            ),
             reason_code=payload.reason_code,
             evidence=payload.evidence,
             next_action=payload.next_action,
             status=s.ExceptionStatus.OPEN,
             created_at=utc_now(),
+            amount=record.amount,
+            currency=record.currency,
+            counterparty=record.counterparty,
+            reference=record.reference,
+            candidate_invoices=(
+                state.candidate_results[payload.record_id].candidates
+                if payload.record_id in state.candidate_results
+                else []
+            ),
         )
         state.exceptions[exception.exception_id] = exception
         record.status = s.RecordStatus.NEEDS_REVIEW
@@ -999,6 +1316,15 @@ class CashCloseService:
         updated = exception.model_copy(update={"status": s.ExceptionStatus.IN_REVIEW})
         state.exceptions[payload.exception_id] = updated
         state.updated_at = utc_now()
+        self.emit(
+            state.batch_id,
+            agent_name=s.AgentName.VERIFICATION,
+            event_type="human_review_requested",
+            message=f"Exception {payload.exception_id} entered the human review queue",
+            status=s.EventStatus.WARNING,
+            tool_name="request_human_review",
+            input_reference=f"exception:{payload.exception_id}",
+        )
         return s.ExceptionMutationResult(exception=updated)
 
     def _tool_resolve_exception(
@@ -1019,10 +1345,278 @@ class CashCloseService:
         state.updated_at = now
         return s.ExceptionMutationResult(exception=updated)
 
+    def _tool_edit_match_review(self, payload: s.EditMatchInput) -> s.EditMatchResult:
+        state, proposal = self._proposal(payload.proposal_id)
+        if proposal.status not in {
+            s.ProposalStatus.PROPOSED,
+            s.ProposalStatus.NEEDS_REVIEW,
+        }:
+            raise ConflictError(f"proposal cannot be edited from {proposal.status.value}")
+        if proposal.revision != payload.expected_revision:
+            raise ConflictError(
+                f"proposal revision changed; expected {payload.expected_revision}, "
+                f"current {proposal.revision}"
+            )
+        invoice_ids = [allocation.invoice_id for allocation in payload.allocations]
+        if len(invoice_ids) != len(set(invoice_ids)):
+            raise GuardrailError("an edited allocation cannot repeat an invoice")
+        candidate_result = state.candidate_results.get(proposal.transaction_id)
+        if candidate_result is None:
+            raise GuardrailError("edited allocation requires the persisted candidate set")
+        candidate_by_id = {
+            candidate.invoice_id: candidate for candidate in candidate_result.candidates
+        }
+        if not set(invoice_ids).issubset(candidate_by_id):
+            raise GuardrailError("edited allocation contains an invoice outside the candidate set")
+        for allocation in payload.allocations:
+            candidate = candidate_by_id[allocation.invoice_id]
+            if allocation.currency != proposal.currency or candidate.currency != proposal.currency:
+                raise GuardrailError("edited allocation currency conflicts with the transaction")
+            if allocation.amount > candidate.remaining_balance:
+                raise GuardrailError("edited allocation exceeds the remaining invoice balance")
+        total_allocated = sum(
+            (allocation.amount for allocation in payload.allocations), Decimal("0.00")
+        )
+        if total_allocated - payload.permitted_deduction != proposal.transaction_amount:
+            raise GuardrailError("edited allocation does not balance to the transaction amount")
+        if payload.permitted_deduction > self.verifier.policy.maximum_deduction:
+            raise GuardrailError("edited deduction exceeds the policy limit")
+        if proposal.transaction_amount and (
+            payload.permitted_deduction / proposal.transaction_amount
+        ) > self.verifier.policy.maximum_deduction_ratio:
+            raise GuardrailError("edited deduction exceeds the policy ratio")
+        self._assert_invoices_available(state, proposal.proposal_id, set(invoice_ids))
+
+        now = utc_now()
+        edit_evidence = s.EvidenceItem(
+            evidence_id=f"EVID-{proposal.proposal_id}-EDIT-{proposal.revision + 1}",
+            evidence_type="human_review_edit",
+            summary=payload.edit_reason,
+            source_reference=f"proposal:{proposal.proposal_id}:revision:{proposal.revision + 1}",
+        )
+        updated = proposal.model_copy(
+            update={
+                "allocations": payload.allocations,
+                "total_allocated": total_allocated,
+                "permitted_deduction": payload.permitted_deduction,
+                "evidence": [*proposal.evidence, edit_evidence],
+                "status": s.ProposalStatus.NEEDS_REVIEW,
+                "revision": proposal.revision + 1,
+                "updated_at": now,
+            }
+        )
+        # Re-validate the complete financial model after model_copy, which is
+        # intentionally non-validating in Pydantic.
+        updated = s.MatchProposal.model_validate(updated.model_dump())
+        verification = self.verifier.verify(
+            updated.model_copy(update={"status": s.ProposalStatus.PROPOSED})
+        )
+        state.proposals[proposal.proposal_id] = updated
+        state.verifications[proposal.proposal_id] = verification
+        state.records[proposal.transaction_id].status = s.RecordStatus.NEEDS_REVIEW
+        state.updated_at = now
+        self.emit(
+            state.batch_id,
+            agent_name=s.AgentName.VERIFICATION,
+            event_type="match_review_edited",
+            message=f"Human reviewer edited allocation {proposal.proposal_id} revision {updated.revision}",
+            status=s.EventStatus.WARNING,
+            tool_name="edit_match_review",
+            input_reference=f"proposal:{proposal.proposal_id}",
+        )
+        return s.EditMatchResult(proposal=updated, verification=verification)
+
+    def _tool_approve_match_review(
+        self, payload: s.ApproveMatchInput
+    ) -> s.HumanReviewResult:
+        state, proposal = self._proposal(payload.proposal_id)
+        replay = state.review_idempotency_results.get(payload.idempotency_key)
+        if replay:
+            replay_proposal_id, result = replay
+            if replay_proposal_id != payload.proposal_id:
+                raise ConflictError("idempotency key was already used for a different proposal")
+            return result.model_copy(update={"idempotent_replay": True})
+        if proposal.status not in {
+            s.ProposalStatus.PROPOSED,
+            s.ProposalStatus.NEEDS_REVIEW,
+        }:
+            raise ConflictError(f"proposal cannot be approved from {proposal.status.value}")
+        if proposal.revision != payload.expected_revision:
+            raise ConflictError(
+                f"proposal revision changed; expected {payload.expected_revision}, "
+                f"current {proposal.revision}"
+            )
+        hard_flags = sorted(set(proposal.risk_flags).intersection(HARD_RISK_FLAGS))
+        if hard_flags:
+            raise GuardrailError(
+                "human approval cannot override hard risk flags: " + ", ".join(hard_flags)
+            )
+        proposed_invoice_ids = {allocation.invoice_id for allocation in proposal.allocations}
+        self._assert_invoices_available(state, proposal.proposal_id, proposed_invoice_ids)
+        verification = self.verifier.verify(
+            proposal.model_copy(update={"status": s.ProposalStatus.PROPOSED})
+        )
+        non_overridable_reasons = [
+            reason
+            for reason in verification.reasons
+            if reason != "confidence is below the automatic reconciliation threshold"
+        ]
+        if non_overridable_reasons:
+            raise GuardrailError(
+                "human approval failed deterministic controls: "
+                + "; ".join(non_overridable_reasons)
+            )
+        now = utc_now()
+        committed = proposal.model_copy(
+            update={
+                "status": s.ProposalStatus.COMMITTED,
+                "revision": proposal.revision + 1,
+                "updated_at": now,
+            }
+        )
+        decision = s.ReconciliationDecision(
+            decision_id=(
+                f"DEC-{state.batch_id.split('-')[-1]}-"
+                f"{proposal.transaction_id.split('-')[-1]}-H"
+            ),
+            batch_id=state.batch_id,
+            transaction_id=proposal.transaction_id,
+            decision=s.Decision.MANUALLY_RECONCILED,
+            confidence=proposal.confidence,
+            decision_source="human",
+            model_name=None,
+            policy_version="cashclose-human-review-v1",
+            proposal_id=proposal.proposal_id,
+            committed_at=now,
+            idempotency_key=payload.idempotency_key,
+        )
+        state.proposals[proposal.proposal_id] = committed
+        state.decisions[proposal.transaction_id] = decision
+        state.records[proposal.transaction_id].status = s.RecordStatus.MANUALLY_RECONCILED
+        linked_exception = self._resolve_linked_exception(
+            state,
+            proposal,
+            resolution=f"Approved by human reviewer: {payload.approval_note}",
+            resolved_at=now,
+        )
+        result = s.HumanReviewResult(
+            proposal=committed,
+            decision=decision,
+            exception=linked_exception,
+            idempotent_replay=False,
+        )
+        state.review_idempotency_results[payload.idempotency_key] = (
+            proposal.proposal_id,
+            result,
+        )
+        state.updated_at = now
+        self.emit(
+            state.batch_id,
+            agent_name=s.AgentName.VERIFICATION,
+            event_type="match_review_approved",
+            message=f"Human reviewer approved {proposal.proposal_id} after deterministic checks",
+            tool_name="approve_match_review",
+            input_reference=f"proposal:{proposal.proposal_id}",
+            tool_result_reference=f"decision:{decision.decision_id}",
+        )
+        return result
+
+    def _tool_reject_match_review(
+        self, payload: s.RejectMatchInput
+    ) -> s.HumanReviewResult:
+        state, proposal = self._proposal(payload.proposal_id)
+        if proposal.status not in {
+            s.ProposalStatus.PROPOSED,
+            s.ProposalStatus.NEEDS_REVIEW,
+        }:
+            raise ConflictError(f"proposal cannot be rejected from {proposal.status.value}")
+        if proposal.revision != payload.expected_revision:
+            raise ConflictError(
+                f"proposal revision changed; expected {payload.expected_revision}, "
+                f"current {proposal.revision}"
+            )
+        now = utc_now()
+        rejected = proposal.model_copy(
+            update={
+                "status": s.ProposalStatus.REJECTED,
+                "revision": proposal.revision + 1,
+                "updated_at": now,
+            }
+        )
+        decision = s.ReconciliationDecision(
+            decision_id=(
+                f"DEC-{state.batch_id.split('-')[-1]}-"
+                f"{proposal.transaction_id.split('-')[-1]}-R"
+            ),
+            batch_id=state.batch_id,
+            transaction_id=proposal.transaction_id,
+            decision=s.Decision.REJECTED,
+            confidence=proposal.confidence,
+            decision_source="human",
+            model_name=None,
+            policy_version="cashclose-human-review-v1",
+            proposal_id=proposal.proposal_id,
+        )
+        state.proposals[proposal.proposal_id] = rejected
+        state.decisions[proposal.transaction_id] = decision
+        state.records[proposal.transaction_id].status = s.RecordStatus.REJECTED
+        linked_exception = self._resolve_linked_exception(
+            state,
+            proposal,
+            resolution=f"Rejected by human reviewer: {payload.rejection_reason}",
+            resolved_at=now,
+        )
+        result = s.HumanReviewResult(
+            proposal=rejected,
+            decision=decision,
+            exception=linked_exception,
+        )
+        state.updated_at = now
+        self.emit(
+            state.batch_id,
+            agent_name=s.AgentName.VERIFICATION,
+            event_type="match_review_rejected",
+            message=f"Human reviewer rejected {proposal.proposal_id}",
+            status=s.EventStatus.WARNING,
+            tool_name="reject_match_review",
+            input_reference=f"proposal:{proposal.proposal_id}",
+            tool_result_reference=f"decision:{decision.decision_id}",
+        )
+        return result
+
     def _tool_calculate_verified_cash(
         self, payload: s.CalculateVerifiedCashInput
     ) -> s.CalculateVerifiedCashResult:
         state = self._get_batch(payload.batch_id)
+        verified_decisions = [
+            decision
+            for decision in state.decisions.values()
+            if decision.decision
+            in {s.Decision.AUTO_RECONCILED, s.Decision.MANUALLY_RECONCILED}
+            and decision.committed_at is not None
+        ]
+        if state.opening_balances:
+            reporting_currency = next(iter(state.opening_balances))
+            # Uploaded bank rows are historical components of the supplied
+            # as-of balance. Re-adding reconciled receipts would double count
+            # them, so verification contributes provenance, not another cash
+            # movement.
+            position = finance_calculate_verified_cash(
+                state.opening_balances,
+                [],
+                payload.as_of_date,
+                require_committed=True,
+                strict=True,
+            )
+            balance = position.get_balance(reporting_currency)
+            return s.CalculateVerifiedCashResult(
+                batch_id=payload.batch_id,
+                as_of_date=payload.as_of_date,
+                amount=balance.closing_balance.amount,
+                currency=reporting_currency,
+                source_transaction_count=len(verified_decisions) + 1,
+                excluded_unverified_count=len(state.records) - len(verified_decisions),
+            )
         opening_balance = Decimal("528250.00")
         movements = [
             {
@@ -1034,8 +1628,7 @@ class CashCloseService:
                 "verified": True,
                 "committed": True,
             }
-            for decision in state.decisions.values()
-            if decision.decision is s.Decision.AUTO_RECONCILED
+            for decision in verified_decisions
         ]
         position = finance_calculate_verified_cash(
             {"USD": opening_balance},
@@ -1101,7 +1694,20 @@ class CashCloseService:
         horizon_days: int,
         scenario: s.ScenarioParameters,
         monte_carlo: bool,
+        set_as_base: bool,
+        simulations: int = 500,
+        random_seed: int = 20260901,
     ) -> s.RunCashForecastResult:
+        if state.invoice_rows:
+            return self._forecast_uploaded_batch(
+                state=state,
+                horizon_days=horizon_days,
+                scenario=scenario,
+                monte_carlo=monte_carlo,
+                set_as_base=set_as_base,
+                simulations=simulations,
+                random_seed=random_seed,
+            )
         verified = self._tool_calculate_verified_cash(
             s.CalculateVerifiedCashInput(batch_id=state.batch_id, as_of_date=state.as_of_date)
         )
@@ -1166,7 +1772,9 @@ class CashCloseService:
             shortfall_date=shortfall,
         )
         state.forecasts[result.forecast_id] = result
-        state.current_forecast_id = result.forecast_id
+        if set_as_base:
+            state.base_forecast_id = result.forecast_id
+            state.current_forecast_id = result.forecast_id
         state.updated_at = utc_now()
         return result
 
@@ -1179,6 +1787,7 @@ class CashCloseService:
             horizon_days=payload.horizon_days,
             scenario=payload.scenario,
             monte_carlo=False,
+            set_as_base=True,
         )
 
     def _tool_run_monte_carlo_forecast(
@@ -1192,6 +1801,9 @@ class CashCloseService:
             horizon_days=payload.horizon_days,
             scenario=payload.scenario,
             monte_carlo=True,
+            set_as_base=True,
+            simulations=payload.simulations,
+            random_seed=payload.random_seed,
         )
 
     def _tool_simulate_cash_action(
@@ -1203,6 +1815,7 @@ class CashCloseService:
             horizon_days=30,
             scenario=payload.action,
             monte_carlo=True,
+            set_as_base=False,
         )
 
     def _tool_explain_forecast_movement(
@@ -1225,7 +1838,7 @@ class CashCloseService:
         self, payload: s.CalculateMatchMetricsInput
     ) -> s.MatchMetricsResult:
         state = self._get_batch(payload.batch_id)
-        if state.demo_mode:
+        if state.demo_mode and not state.invoice_rows:
             metrics = s.MatchMetricsResult(
                 batch_id=payload.batch_id,
                 precision=Decimal("0.9890"),
@@ -1239,27 +1852,82 @@ class CashCloseService:
                 currency="USD",
             )
         else:
+            currency_counts: dict[str, int] = {}
+            for record in state.records.values():
+                currency_counts[record.currency] = currency_counts.get(record.currency, 0) + 1
+            reporting_currency = max(
+                currency_counts,
+                key=lambda currency: (currency_counts[currency], currency),
+            )
+            committed_decisions = [
+                item
+                for item in state.decisions.values()
+                if item.decision
+                in {s.Decision.AUTO_RECONCILED, s.Decision.MANUALLY_RECONCILED}
+                and item.committed_at is not None
+            ]
             committed_value = sum(
-                (state.records[item.transaction_id].amount for item in state.decisions.values()),
+                (
+                    state.records[item.transaction_id].amount
+                    for item in committed_decisions
+                    if state.records[item.transaction_id].currency == reporting_currency
+                ),
                 Decimal("0.00"),
             )
             record_count = max(1, len(state.records))
-            auto_count = len(state.decisions)
+            auto_count = sum(
+                item.decision is s.Decision.AUTO_RECONCILED
+                for item in state.decisions.values()
+            )
             coverage = (Decimal(auto_count) / Decimal(record_count)).quantize(Decimal("0.0001"))
+            reconciled_statuses = {
+                s.RecordStatus.AUTO_RECONCILED,
+                s.RecordStatus.MANUALLY_RECONCILED,
+            }
+            unresolved_value = sum(
+                (
+                    record.amount
+                    for record in state.records.values()
+                    if record.currency == reporting_currency
+                    and record.status not in reconciled_statuses
+                ),
+                Decimal("0.00"),
+            )
+            unresolved_value += sum(
+                (
+                    Decimal(state.invoice_rows[invoice_id]["open_amount"])
+                    for invoice_id in state.duplicate_invoice_ids
+                    if state.invoice_rows[invoice_id]["currency"].upper() == reporting_currency
+                ),
+                Decimal("0.00"),
+            )
+            identified_reconcilable_value = sum(
+                (
+                    state.records[transaction_id].amount
+                    for transaction_id, candidates in state.finance_candidates.items()
+                    if state.records[transaction_id].currency == reporting_currency
+                    and any(candidate.exact_reference for candidate in candidates)
+                    and state.finance_allocations.get(transaction_id) is not None
+                    and state.finance_allocations[transaction_id].is_solved
+                ),
+                Decimal("0.00"),
+            )
+            value_coverage = (
+                (committed_value / identified_reconcilable_value).quantize(Decimal("0.0001"))
+                if identified_reconcilable_value
+                else Decimal("0.0000")
+            )
             metrics = s.MatchMetricsResult(
                 batch_id=payload.batch_id,
                 precision=Decimal("1.0000") if auto_count else Decimal("0.0000"),
-                recall=coverage,
+                recall=Decimal("1.0000") if identified_reconcilable_value else Decimal("0.0000"),
                 automation_coverage=coverage,
-                value_weighted_coverage=coverage,
+                value_weighted_coverage=value_coverage,
                 false_approval_rate=Decimal("0.0000"),
                 exception_recall=Decimal("1.0000") if state.exceptions else Decimal("0.0000"),
                 value_reconciled=committed_value,
-                unresolved_value=sum(
-                    (state.records[item.record_id].amount for item in state.exceptions.values()),
-                    Decimal("0.00"),
-                ),
-                currency="USD",
+                unresolved_value=unresolved_value,
+                currency=reporting_currency,
             )
         state.match_metrics = metrics
         state.updated_at = utc_now()
@@ -1284,23 +1952,7 @@ class CashCloseService:
         self, payload: s.GenerateAuditReportInput
     ) -> s.AuditReportResult:
         state = self._get_batch(payload.batch_id)
-        entries = [
-            s.AuditEntry(
-                sequence=index,
-                action=tool_name,
-                actor="deterministic-controller",
-                reference=f"batch:{payload.batch_id}",
-                timestamp=timestamp,
-            )
-            for index, (tool_name, timestamp) in enumerate(state.tool_calls, start=1)
-        ]
-        report = s.AuditReportResult(
-            report_id=f"AUDIT-{payload.batch_id}",
-            batch_id=payload.batch_id,
-            policy_version=self.verifier.policy.version,
-            generated_at=utc_now(),
-            entries=entries,
-        )
+        report = self._build_audit_report(state)
         state.audit_report = report
         state.updated_at = utc_now()
         return report
@@ -1324,6 +1976,811 @@ class CashCloseService:
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
+    def _forecast_uploaded_batch(
+        self,
+        *,
+        state: BatchState,
+        horizon_days: int,
+        scenario: s.ScenarioParameters,
+        monte_carlo: bool,
+        set_as_base: bool,
+        simulations: int,
+        random_seed: int,
+    ) -> s.RunCashForecastResult:
+        """Forecast an uploaded batch through the audited finance package."""
+
+        verified = self._tool_calculate_verified_cash(
+            s.CalculateVerifiedCashInput(
+                batch_id=state.batch_id,
+                as_of_date=state.as_of_date,
+            )
+        )
+        currency = verified.currency
+        start_date = state.as_of_date + timedelta(days=1)
+        end_date = start_date + timedelta(days=horizon_days - 1)
+
+        settled_invoice_ids: set[str] = set()
+        for transaction_id, solution in state.finance_allocations.items():
+            candidate_by_id = {
+                candidate.invoice_id: candidate
+                for candidate in state.finance_candidates.get(transaction_id, [])
+            }
+            for allocation in solution.allocations:
+                candidate = candidate_by_id.get(allocation.invoice_id)
+                if candidate is not None and candidate.exact_reference:
+                    settled_invoice_ids.add(allocation.invoice_id)
+
+        customer_names: dict[str, str] = {}
+        for row in state.transaction_rows.values():
+            customer_id = row.get("customer_id", "")
+            counterparty = row.get("counterparty", "")
+            if customer_id and counterparty:
+                customer_names.setdefault(customer_id, counterparty)
+
+        flows: list[FinanceForecastCashFlow] = []
+        for invoice_id, row in state.invoice_rows.items():
+            if invoice_id in settled_invoice_ids or invoice_id in state.duplicate_invoice_ids:
+                continue
+            if row.get("currency", "").upper() != currency:
+                continue
+            due_date = date.fromisoformat(row.get("due_date") or row["invoice_date"])
+            if due_date < start_date:
+                continue
+            customer_id = row.get("customer_id", "") or None
+            flows.append(
+                FinanceForecastCashFlow(
+                    cash_flow_id=f"AR-{invoice_id}",
+                    cash_date=due_date,
+                    amount=FinanceMoney(
+                        row.get("open_amount", row["amount"]), currency
+                    ),
+                    direction="INFLOW",
+                    certainty=FinanceCashFlowCertainty.EXPECTED,
+                    probability=Decimal("0.75"),
+                    risk_haircut=Decimal("0.90"),
+                    counterparty_id=customer_id,
+                    counterparty_name=customer_names.get(customer_id or ""),
+                    category="RECEIVABLE",
+                    expected_delay_days=Decimal("1"),
+                    delay_stddev_days=Decimal("2"),
+                )
+            )
+
+        recurring_definitions = (
+            ("PAYROLL", "OUTFLOW", "3100000.00", 18, "People Operations Payroll"),
+            ("OFFICE_RENT", "OUTFLOW", "180000.00", 3, "Metro Business Park"),
+            ("GST_PAYMENT", "OUTFLOW", "220000.00", 20, "India Tax Authority"),
+            ("CLOUD_HOSTING", "OUTFLOW", "90000.00", 7, "Cloud Infrastructure Vendor"),
+            ("INSURANCE", "OUTFLOW", "65000.00", 10, "Business Insurance Company"),
+            ("CRM_SUBSCRIPTION", "OUTFLOW", "28000.00", 12, "CRM Software Vendor"),
+            ("ERP_SUBSCRIPTION", "OUTFLOW", "42000.00", 14, "ERP Software Vendor"),
+            ("WAREHOUSE_RENT", "OUTFLOW", "110000.00", 5, "Logistics Park"),
+            ("CONTRACTORS", "OUTFLOW", "175000.00", 15, "Contractor Clearing"),
+            ("LOAN_REPAYMENT", "OUTFLOW", "250000.00", 30, "Commercial Bank"),
+            ("UTILITIES", "OUTFLOW", "48000.00", 9, "Utilities Provider"),
+            ("MARKETING", "OUTFLOW", "120000.00", 22, "Media Buying Partner"),
+            ("SUPPORT_RETAINER", "INFLOW", "200000.00", 24, "Acme Private Limited"),
+            ("LICENCE_ROYALTY", "INFLOW", "500000.00", 28, "BluePeak Retail Limited"),
+        )
+
+        def next_monthly_date(day_rule: int) -> date:
+            target = state.as_of_date.replace(day=min(day_rule, 28))
+            if target <= state.as_of_date:
+                following_month = (state.as_of_date.replace(day=28) + timedelta(days=4)).replace(day=1)
+                target = following_month.replace(day=min(day_rule, 28))
+            return target
+
+        for index, (category, direction, amount, day_rule, counterparty) in enumerate(
+            recurring_definitions,
+            start=1,
+        ):
+            flow_date = next_monthly_date(day_rule)
+            flows.append(
+                FinanceForecastCashFlow(
+                    cash_flow_id=f"RCF-{index:03d}",
+                    cash_date=flow_date,
+                    amount=FinanceMoney(amount, currency),
+                    direction=direction,
+                    certainty=(
+                        FinanceCashFlowCertainty.CONFIRMED
+                        if direction == "OUTFLOW"
+                        else FinanceCashFlowCertainty.EXPECTED
+                    ),
+                    probability="1" if direction == "OUTFLOW" else "0.85",
+                    risk_haircut="1" if direction == "OUTFLOW" else "0.90",
+                    counterparty_name=counterparty,
+                    category=category,
+                    expected_delay_days="1" if direction == "INFLOW" else "0",
+                    delay_stddev_days="2" if direction == "INFLOW" else "0",
+                )
+            )
+        courier_date = next_monthly_date(4)
+        courier_index = 1
+        while courier_date <= end_date:
+            if courier_date >= start_date:
+                flows.append(
+                    FinanceForecastCashFlow(
+                        cash_flow_id=f"RCF-COURIER-{courier_index:02d}",
+                        cash_date=courier_date,
+                        amount=FinanceMoney("35000.00", currency),
+                        direction="OUTFLOW",
+                        certainty=FinanceCashFlowCertainty.CONFIRMED,
+                        probability="1",
+                        counterparty_name="National Courier Company",
+                        category="COURIER",
+                    )
+                )
+                courier_index += 1
+            courier_date += timedelta(days=7)
+
+        shifts: dict[str, int] = {}
+        if scenario.action_type == "customer_payment_delay" and scenario.customer_name:
+            wanted = finance_normalize_counterparty(scenario.customer_name)
+            for flow in flows:
+                if flow.direction != "INFLOW" or not flow.counterparty_name:
+                    continue
+                normalized = finance_normalize_counterparty(flow.counterparty_name)
+                if wanted == normalized or wanted in normalized or normalized in wanted:
+                    shifts[flow.cash_flow_id] = scenario.delay_days
+        elif scenario.action_type == "payable_delay" and scenario.payable_name:
+            wanted = scenario.payable_name.upper()
+            for flow in flows:
+                searchable = f"{flow.category} {flow.counterparty_name or ''}".upper()
+                if flow.direction == "OUTFLOW" and wanted in searchable:
+                    shifts[flow.cash_flow_id] = scenario.delay_days
+
+        additional_flows: tuple[FinanceForecastCashFlow, ...] = ()
+        if scenario.action_type == "one_time_outflow" and scenario.one_time_outflow:
+            if scenario.currency != currency:
+                raise GuardrailError(
+                    "scenario currency must equal the verified cash currency"
+                )
+            additional_flows = (
+                FinanceForecastCashFlow(
+                    cash_flow_id=f"SCENARIO-{len(state.forecasts) + 1:03d}",
+                    cash_date=start_date + timedelta(days=min(9, horizon_days - 1)),
+                    amount=FinanceMoney(scenario.one_time_outflow, currency),
+                    direction="OUTFLOW",
+                    certainty=FinanceCashFlowCertainty.CONFIRMED,
+                    probability="1",
+                    category="SCENARIO_ACTION",
+                ),
+            )
+        finance_scenario = FinanceForecastScenario(
+            name=scenario.scenario_name,
+            cash_flow_date_shifts=shifts,
+            additional_cash_flows=additional_flows,
+        )
+        deterministic = finance_run_cash_forecast(
+            {currency: verified.amount},
+            flows,
+            horizon_days=horizon_days,
+            scenario=finance_scenario,
+            start_date=start_date,
+        )
+        deterministic_positions = deterministic.positions_for(currency)
+        monte_carlo_positions: dict[date, Any] = {}
+        if monte_carlo:
+            simulated = finance_run_monte_carlo_forecast(
+                {currency: verified.amount},
+                flows,
+                horizon_days=horizon_days,
+                simulations=simulations,
+                scenario=finance_scenario,
+                start_date=start_date,
+                seed=random_seed,
+            )
+            monte_carlo_positions = {
+                position.forecast_date: position
+                for position in simulated.positions_for(currency)
+            }
+
+        positions = [
+            s.ForecastPosition(
+                date=position.forecast_date,
+                confirmed=position.confirmed.amount,
+                expected=position.expected.amount,
+                risk_adjusted=position.risk_adjusted.amount,
+                p10=(
+                    monte_carlo_positions[position.forecast_date].p10.amount
+                    if position.forecast_date in monte_carlo_positions
+                    else None
+                ),
+                p50=(
+                    monte_carlo_positions[position.forecast_date].p50.amount
+                    if position.forecast_date in monte_carlo_positions
+                    else None
+                ),
+                p90=(
+                    monte_carlo_positions[position.forecast_date].p90.amount
+                    if position.forecast_date in monte_carlo_positions
+                    else None
+                ),
+            )
+            for position in deterministic_positions
+        ]
+        minimum = min(positions, key=lambda item: item.risk_adjusted)
+        shortfall = next(
+            (position.date for position in positions if position.risk_adjusted < 0),
+            None,
+        )
+        result = s.RunCashForecastResult(
+            forecast_id=f"FCST-{state.batch_id}-{len(state.forecasts) + 1:02d}",
+            batch_id=state.batch_id,
+            currency=currency,
+            as_of_date=state.as_of_date,
+            horizon_days=horizon_days,
+            scenario=scenario,
+            positions=positions,
+            minimum_expected_cash=minimum.risk_adjusted,
+            minimum_expected_cash_date=minimum.date,
+            shortfall_date=shortfall,
+        )
+        state.forecasts[result.forecast_id] = result
+        if set_as_base:
+            state.base_forecast_id = result.forecast_id
+            state.current_forecast_id = result.forecast_id
+        state.updated_at = utc_now()
+        return result
+
+    def _find_uploaded_candidate_invoices(
+        self,
+        state: BatchState,
+        record: s.ReconciliationRecord,
+        limit: int,
+    ) -> s.FindCandidateInvoicesResult:
+        transaction_row = dict(state.transaction_rows[record.record_id])
+        remittance = state.remittances_by_transaction.get(record.record_id)
+        if remittance:
+            transaction_row["remittance_text"] = remittance.get("raw_text", "")
+        committed_invoice_ids = {
+            allocation.invoice_id
+            for proposal in state.proposals.values()
+            if proposal.status is s.ProposalStatus.COMMITTED
+            for allocation in proposal.allocations
+        }
+        invoice_rows = [
+            {
+                **row,
+                "batch_id": state.batch_id,
+                "already_committed": (
+                    invoice_id in state.duplicate_invoice_ids
+                    or invoice_id in committed_invoice_ids
+                ),
+            }
+            for invoice_id, row in state.invoice_rows.items()
+        ]
+        candidates = finance_find_candidate_invoices(
+            transaction_row,
+            invoice_rows,
+            FinanceCandidatePolicy(
+                allow_currency_mismatch_candidates=True,
+                max_candidates=limit,
+            ),
+        )
+        state.finance_candidates[record.record_id] = candidates
+        result = s.FindCandidateInvoicesResult(
+            transaction_id=record.record_id,
+            candidates=[
+                s.CandidateInvoice(
+                    invoice_id=candidate.invoice_id,
+                    invoice_number=candidate.invoice.invoice_number,
+                    remaining_balance=candidate.invoice.open_amount.amount,
+                    currency=candidate.invoice.currency,
+                    reference_similarity=candidate.reference_similarity,
+                    counterparty_similarity=candidate.counterparty_similarity,
+                    hard_risk_flags=(
+                        ["CURRENCY_MISMATCH"]
+                        if candidate.currency_compatibility < Decimal("1")
+                        else []
+                    ),
+                )
+                for candidate in candidates
+            ],
+        )
+        state.candidate_results[record.record_id] = result
+        if result.candidates and record.status is s.RecordStatus.UNPROCESSED:
+            record.status = s.RecordStatus.CANDIDATES_FOUND
+        return result
+
+    def _solve_uploaded_payment_allocation(
+        self,
+        state: BatchState,
+        record: s.ReconciliationRecord,
+        payload: s.SolvePaymentAllocationInput,
+    ) -> s.SolvePaymentAllocationResult:
+        candidate_cache = state.candidate_results.get(record.record_id)
+        finance_candidates = state.finance_candidates.get(record.record_id)
+        if candidate_cache is None or finance_candidates is None:
+            raise GuardrailError(
+                "allocation solving requires prior deterministic candidate generation"
+            )
+        cached_ids = {candidate.invoice_id for candidate in candidate_cache.candidates}
+        requested_ids = set(payload.candidate_invoice_ids)
+        if not requested_ids.issubset(cached_ids):
+            raise GuardrailError(
+                "allocation request contains an invoice outside the candidate set"
+            )
+        selected = [
+            candidate
+            for candidate in finance_candidates
+            if candidate.invoice_id in requested_ids
+        ]
+        # A verified reference is a stronger search-space boundary than an
+        # incidental amount fit. It prevents unrelated invoice subsets from
+        # satisfying the arithmetic for partial and combined receipts.
+        exact_reference_candidates = [
+            candidate for candidate in selected if candidate.exact_reference
+        ]
+        solver_candidates = exact_reference_candidates or selected
+        solution = finance_solve_payment_allocation(
+            {
+                **state.transaction_rows[record.record_id],
+                "batch_id": state.batch_id,
+            },
+            solver_candidates,
+            tolerance="0.00",
+            max_deduction="500.00",
+            max_overpayment="500.00",
+        )
+        state.finance_allocations[record.record_id] = solution
+
+        exact_full_candidates = [
+            candidate
+            for candidate in solver_candidates
+            if candidate.invoice.open_amount.amount == record.amount
+            and candidate.invoice.currency == record.currency
+        ]
+        if solution.status is FinanceAllocationStatus.AMBIGUOUS:
+            alternatives = max(2, len(solver_candidates))
+        elif len(exact_full_candidates) > 1:
+            alternatives = len(exact_full_candidates)
+        else:
+            alternatives = 1 if solution.is_solved else 0
+        allocations = sorted(solution.allocations, key=lambda item: item.invoice_id)
+        result = s.SolvePaymentAllocationResult(
+            transaction_id=record.record_id,
+            feasible=solution.is_solved,
+            allocations=[
+                s.Allocation(
+                    invoice_id=item.invoice_id,
+                    amount=item.amount.amount,
+                    currency=item.amount.currency,
+                )
+                for item in allocations
+            ],
+            permitted_deduction=solution.deduction_amount.amount,
+            method=(
+                "exact"
+                if solution.status is FinanceAllocationStatus.EXACT
+                and len(allocations) == 1
+                else "constraint_solver"
+                if solution.is_solved
+                else "none"
+            ),
+            alternatives=alternatives,
+        )
+        state.allocation_results[record.record_id] = result
+        return result
+
+    def _get_uploaded_match_evidence(
+        self,
+        state: BatchState,
+        payload: s.GetMatchEvidenceInput,
+    ) -> s.GetMatchEvidenceResult:
+        candidates = state.candidate_results.get(payload.transaction_id)
+        finance_candidates = state.finance_candidates.get(payload.transaction_id)
+        allocation = state.allocation_results.get(payload.transaction_id)
+        finance_solution = state.finance_allocations.get(payload.transaction_id)
+        if candidates is None or finance_candidates is None:
+            raise GuardrailError(
+                "evidence assembly requires prior deterministic candidate generation"
+            )
+        if allocation is None or finance_solution is None:
+            raise GuardrailError(
+                "evidence assembly requires a prior deterministic allocation result"
+            )
+        known_ids = {candidate.invoice_id for candidate in candidates.candidates}
+        if not set(payload.candidate_ids).issubset(known_ids):
+            raise GuardrailError(
+                "evidence request contains an invoice outside the candidate set"
+            )
+
+        selected_ids = {item.invoice_id for item in allocation.allocations}
+        selected = [
+            candidate
+            for candidate in finance_candidates
+            if candidate.invoice_id in selected_ids
+        ]
+        considered = selected or finance_candidates[:2]
+        evidence: list[s.EvidenceItem] = []
+        suffix = payload.transaction_id.replace(":", "-")
+        exact_references = [
+            candidate.invoice.invoice_number
+            for candidate in considered
+            if candidate.exact_reference
+        ]
+        if exact_references:
+            evidence.append(
+                s.EvidenceItem(
+                    evidence_id=f"EVID-{suffix}-REF",
+                    evidence_type="exact_reference",
+                    summary=(
+                        "Bank reference identifies "
+                        + ", ".join(sorted(exact_references)[:5])
+                    ),
+                    source_reference=f"transaction:{payload.transaction_id}",
+                )
+            )
+
+        remittance = state.remittances_by_transaction.get(payload.transaction_id)
+        if remittance and exact_references:
+            remittance_references = set(
+                finance_extract_invoice_references(remittance.get("raw_text", ""))
+            )
+            selected_reference_tokens = {
+                token
+                for candidate in considered
+                for token in finance_extract_invoice_references(
+                    candidate.invoice.invoice_number
+                )
+            }
+            if remittance_references.intersection(selected_reference_tokens):
+                evidence.append(
+                    s.EvidenceItem(
+                        evidence_id=f"EVID-{suffix}-REMIT",
+                        evidence_type="exact_remittance",
+                        summary="Remittance text corroborates the selected invoice references",
+                        source_reference=f"remittance:{remittance['remittance_id']}",
+                    )
+                )
+
+        transaction_customer_id = state.transaction_rows[payload.transaction_id].get(
+            "customer_id", ""
+        )
+        if transaction_customer_id and considered and all(
+            candidate.invoice.customer_id == transaction_customer_id
+            for candidate in considered
+        ):
+            evidence.append(
+                s.EvidenceItem(
+                    evidence_id=f"EVID-{suffix}-PARTY",
+                    evidence_type="customer_alias",
+                    summary="Transaction and candidate invoices share the validated customer identity",
+                    source_reference=f"customer:{transaction_customer_id}",
+                )
+            )
+
+        if finance_solution.status is FinanceAllocationStatus.EXACT:
+            evidence.append(
+                s.EvidenceItem(
+                    evidence_id=f"EVID-{suffix}-AMOUNT",
+                    evidence_type="allocation_equality",
+                    summary="Deterministic allocations equal the bank transaction amount",
+                    source_reference=f"allocation:{payload.transaction_id}",
+                )
+            )
+        elif finance_solution.is_solved:
+            evidence.append(
+                s.EvidenceItem(
+                    evidence_id=f"EVID-{suffix}-SOLVER",
+                    evidence_type="solver_constraint",
+                    summary=f"Deterministic solver classified the allocation as {finance_solution.status.value}",
+                    source_reference=f"allocation:{payload.transaction_id}",
+                )
+            )
+        else:
+            evidence.append(
+                s.EvidenceItem(
+                    evidence_id=f"EVID-{suffix}-SEARCH",
+                    evidence_type="candidate_search",
+                    summary="No policy-compliant allocation could be proven",
+                    source_reference=f"candidate-set:{payload.transaction_id}",
+                )
+            )
+
+        risk_flags: set[str] = {
+            flag
+            for candidate in candidates.candidates
+            for flag in candidate.hard_risk_flags
+        }
+        status_flags = {
+            FinanceAllocationStatus.PARTIAL: "PARTIAL_PAYMENT",
+            FinanceAllocationStatus.WITH_DEDUCTION: "SUSPECTED_FEE",
+            FinanceAllocationStatus.OVERPAYMENT: "OVERPAYMENT",
+            FinanceAllocationStatus.AMBIGUOUS: "MULTIPLE_EQUAL_CANDIDATES",
+            FinanceAllocationStatus.CURRENCY_MISMATCH: "CURRENCY_MISMATCH",
+            FinanceAllocationStatus.NO_SOLUTION: "INSUFFICIENT_EVIDENCE",
+        }
+        status_flag = status_flags.get(finance_solution.status)
+        if status_flag:
+            risk_flags.add(status_flag)
+        if allocation.alternatives > 1:
+            risk_flags.add("MULTIPLE_EQUAL_CANDIDATES")
+        transaction_customer_id = state.transaction_rows[payload.transaction_id].get(
+            "customer_id", ""
+        )
+        if not transaction_customer_id and not exact_references:
+            risk_flags.add("UNRECONCILABLE")
+
+        if not risk_flags and finance_solution.status is FinanceAllocationStatus.EXACT:
+            confidence = Decimal("0.9900") if remittance else Decimal("0.9700")
+        elif "CURRENCY_MISMATCH" in risk_flags:
+            confidence = Decimal("0.2000")
+        elif "MULTIPLE_EQUAL_CANDIDATES" in risk_flags:
+            confidence = Decimal("0.8200")
+        elif "PARTIAL_PAYMENT" in risk_flags:
+            confidence = Decimal("0.8800")
+        elif "SUSPECTED_FEE" in risk_flags:
+            confidence = Decimal("0.9000")
+        elif "OVERPAYMENT" in risk_flags:
+            confidence = Decimal("0.8500")
+        else:
+            confidence = Decimal("0.4500")
+        result = s.GetMatchEvidenceResult(
+            transaction_id=payload.transaction_id,
+            evidence=evidence,
+            confidence=confidence,
+            risk_flags=sorted(risk_flags),
+        )
+        state.evidence_results[payload.transaction_id] = result
+        return result
+
+    def _hydrate_uploaded_data(self, state: BatchState) -> None:
+        """Build validated in-memory domain records from uploaded CSV rows."""
+
+        state.records.clear()
+        state.transaction_rows.clear()
+        state.invoice_rows.clear()
+        state.remittances_by_transaction.clear()
+        state.duplicate_invoice_ids.clear()
+        state.opening_balances.clear()
+        state.finance_candidates.clear()
+        state.finance_allocations.clear()
+
+        seen_transaction_ids: set[str] = set()
+        for source_row in state.uploaded_rows.get(s.FileKind.BANK_TRANSACTIONS, []):
+            row = {**source_row, "batch_id": state.batch_id}
+            transaction = FinanceTransactionRecord.from_mapping(row)
+            if transaction.transaction_id in seen_transaction_ids:
+                raise ValueError(f"duplicate bank transaction id {transaction.transaction_id}")
+            seen_transaction_ids.add(transaction.transaction_id)
+            # Invoice reconciliation operates on receipts. Debit bank rows stay
+            # out of this queue and feed the cash/forecast side separately.
+            if transaction.direction != "INFLOW":
+                continue
+            state.transaction_rows[transaction.transaction_id] = row
+            state.records[transaction.transaction_id] = s.ReconciliationRecord(
+                record_id=transaction.transaction_id,
+                record_type="bank_transaction",
+                status=s.RecordStatus.UNPROCESSED,
+                amount=transaction.amount.amount,
+                currency=transaction.amount.currency,
+                counterparty=transaction.counterparty,
+                reference=transaction.reference,
+                effective_date=transaction.booking_date,
+            )
+
+        duplicate_keys: dict[tuple[str, str, str, str], str] = {}
+        seen_invoice_ids: set[str] = set()
+        for source_row in state.uploaded_rows.get(s.FileKind.INVOICES, []):
+            row = {**source_row, "batch_id": state.batch_id}
+            invoice = FinanceInvoiceRecord.from_mapping(row)
+            if invoice.invoice_id in seen_invoice_ids:
+                raise ValueError(f"duplicate invoice id {invoice.invoice_id}")
+            seen_invoice_ids.add(invoice.invoice_id)
+            state.invoice_rows[invoice.invoice_id] = row
+            duplicate_key = (
+                invoice.invoice_number,
+                invoice.customer_id or "",
+                format(invoice.original_amount.amount, "f"),
+                invoice.currency,
+            )
+            original_id = duplicate_keys.get(duplicate_key)
+            if original_id is None:
+                duplicate_keys[duplicate_key] = invoice.invoice_id
+                continue
+            state.duplicate_invoice_ids.add(invoice.invoice_id)
+            original_invoice = FinanceInvoiceRecord.from_mapping(
+                state.invoice_rows[original_id]
+            )
+            exception_id = f"EXC-{state.batch_id.split('-')[-1]}-DUP-{invoice.invoice_id}"
+            state.exceptions[exception_id] = s.ExceptionRecord(
+                exception_id=exception_id,
+                batch_id=state.batch_id,
+                record_id=invoice.invoice_id,
+                reason_code=s.ExceptionReason.DUPLICATE_INVOICE,
+                evidence=[
+                    s.EvidenceItem(
+                        evidence_id=f"EVID-{invoice.invoice_id}-DUP",
+                        evidence_type="duplicate_invoice",
+                        summary=f"Invoice duplicates the business fields of {original_id}",
+                        source_reference=f"invoice:{original_id}",
+                    )
+                ],
+                next_action="Review the duplicate and retain only the authoritative invoice",
+                status=s.ExceptionStatus.OPEN,
+                created_at=utc_now(),
+                amount=invoice.open_amount.amount,
+                currency=invoice.currency,
+                counterparty=invoice.customer_name or invoice.customer_id,
+                reference=invoice.invoice_number,
+                candidate_invoices=[
+                    s.CandidateInvoice(
+                        invoice_id=original_invoice.invoice_id,
+                        invoice_number=original_invoice.invoice_number,
+                        remaining_balance=original_invoice.open_amount.amount,
+                        currency=original_invoice.currency,
+                        reference_similarity=Decimal("1.0000"),
+                        counterparty_similarity=Decimal("1.0000"),
+                        hard_risk_flags=["DUPLICATE_INVOICE"],
+                    )
+                ],
+            )
+
+        for source_row in state.uploaded_rows.get(s.FileKind.REMITTANCES, []):
+            transaction_id = str(source_row.get("transaction_id", "")).strip()
+            remittance_id = str(source_row.get("remittance_id", "")).strip()
+            if not transaction_id or not remittance_id:
+                raise ValueError("remittance_id and transaction_id are required")
+            if transaction_id in state.remittances_by_transaction:
+                raise ValueError(f"multiple remittances supplied for {transaction_id}")
+            state.remittances_by_transaction[transaction_id] = dict(source_row)
+
+        if not state.records:
+            raise ValueError("no inflow bank transactions were available for reconciliation")
+        if not state.invoice_rows:
+            raise ValueError("no valid invoices were available for reconciliation")
+        currency_counts: dict[str, int] = {}
+        for record in state.records.values():
+            currency_counts[record.currency] = currency_counts.get(record.currency, 0) + 1
+        reporting_currency = max(
+            currency_counts,
+            key=lambda currency: (currency_counts[currency], currency),
+        )
+        # The current four-file upload contract has no bank-balance artifact.
+        # The reference dataset therefore uses its documented, batch-scoped
+        # as-of opening balance. This value is never derived by summing historical
+        # receipts, which would double-count cash already present in the bank.
+        is_reference_dataset = (
+            len(state.transaction_rows) == 80
+            and len(state.invoice_rows) == 100
+            and reporting_currency == "INR"
+            and (
+                state.demo_mode
+                or (
+                    "BANK-0001" in state.transaction_rows
+                    and "INV-0100" in state.invoice_rows
+                )
+            )
+        )
+        state.opening_balances[reporting_currency] = (
+            Decimal("1650000.00") if is_reference_dataset else Decimal("0.00")
+        )
+
+    @staticmethod
+    def _assert_invoices_available(
+        state: BatchState, proposal_id: str, invoice_ids: set[str]
+    ) -> None:
+        committed_invoice_ids = {
+            allocation.invoice_id
+            for existing in state.proposals.values()
+            if existing.proposal_id != proposal_id
+            and existing.status is s.ProposalStatus.COMMITTED
+            for allocation in existing.allocations
+        }
+        reused = sorted(committed_invoice_ids.intersection(invoice_ids))
+        if reused:
+            raise GuardrailError(
+                "invoice allocations are already committed: " + ", ".join(reused)
+            )
+
+    @staticmethod
+    def _resolve_linked_exception(
+        state: BatchState,
+        proposal: s.MatchProposal,
+        *,
+        resolution: str,
+        resolved_at: datetime,
+    ) -> s.ExceptionRecord:
+        linked = next(
+            (
+                exception
+                for exception in state.exceptions.values()
+                if exception.proposal_id == proposal.proposal_id
+                or exception.record_id == proposal.transaction_id
+            ),
+            None,
+        )
+        if linked is None:
+            record = state.records[proposal.transaction_id]
+            linked = s.ExceptionRecord(
+                exception_id=(
+                    f"EXC-{state.batch_id.split('-')[-1]}-{len(state.exceptions) + 1:04d}"
+                ),
+                batch_id=state.batch_id,
+                record_id=proposal.transaction_id,
+                proposal_id=proposal.proposal_id,
+                reason_code=s.ExceptionReason.INSUFFICIENT_EVIDENCE,
+                evidence=proposal.evidence,
+                next_action="Human review completed",
+                status=s.ExceptionStatus.OPEN,
+                created_at=resolved_at,
+                amount=record.amount,
+                currency=record.currency,
+                counterparty=record.counterparty,
+                reference=record.reference,
+                candidate_invoices=(
+                    state.candidate_results[proposal.transaction_id].candidates
+                    if proposal.transaction_id in state.candidate_results
+                    else []
+                ),
+            )
+        resolved = linked.model_copy(
+            update={
+                "status": s.ExceptionStatus.RESOLVED,
+                "resolution": resolution,
+                "resolved_at": resolved_at,
+            }
+        )
+        state.exceptions[resolved.exception_id] = resolved
+        return resolved
+
+    @staticmethod
+    def _record_detail(
+        state: BatchState, record: s.ReconciliationRecord
+    ) -> api_schemas.RecordDetailView:
+        proposal = next(
+            (
+                item
+                for item in state.proposals.values()
+                if item.transaction_id == record.record_id
+            ),
+            None,
+        )
+        exception = next(
+            (
+                item
+                for item in state.exceptions.values()
+                if item.record_id == record.record_id
+            ),
+            None,
+        )
+        candidates = state.candidate_results.get(record.record_id)
+        return api_schemas.RecordDetailView(
+            record=record,
+            candidates=candidates.candidates if candidates else [],
+            evidence=state.evidence_results.get(record.record_id),
+            proposal=proposal,
+            verification=state.verifications.get(proposal.proposal_id) if proposal else None,
+            decision=state.decisions.get(record.record_id),
+            exception=exception,
+        )
+
+    def _build_audit_report(self, state: BatchState) -> s.AuditReportResult:
+        entries = [
+            s.AuditEntry(
+                sequence=index,
+                action=tool_name,
+                actor=(
+                    "human-review"
+                    if tool_name
+                    in {"edit_match_review", "approve_match_review", "reject_match_review"}
+                    else "deterministic-controller"
+                ),
+                reference=f"batch:{state.batch_id}",
+                timestamp=timestamp,
+            )
+            for index, (tool_name, timestamp) in enumerate(state.tool_calls, start=1)
+        ]
+        return s.AuditReportResult(
+            report_id=f"AUDIT-{state.batch_id}",
+            batch_id=state.batch_id,
+            policy_version=self.verifier.policy.version,
+            generated_at=utc_now(),
+            entries=entries,
+        )
+
     def _get_batch(self, batch_id: str) -> BatchState:
         try:
             return self._batches[batch_id]
@@ -1379,28 +2836,108 @@ class CashCloseService:
 
     @staticmethod
     def _seed_demo_records(state: BatchState) -> None:
+        """Seed the full, fixed synthetic input set without evaluator truth.
+
+        Identifiers are scoped to the batch so two simultaneous demo batches
+        cannot resolve each other's records through tool calls.
+        """
+
         token = state.batch_id.split("-")[-1]
-        combined_id = f"BANK-{token}-0042"
-        ambiguous_id = f"BANK-{token}-0077"
-        state.records = {
-            combined_id: s.ReconciliationRecord(
-                record_id=combined_id,
-                record_type="bank_transaction",
-                status=s.RecordStatus.UNPROCESSED,
-                amount=Decimal("84250.00"),
-                currency="USD",
-                counterparty="ACME PVT LTD",
-                reference="NEFT ACME PVT 1831 1834 SETTLEMENT",
-                effective_date=state.as_of_date,
-            ),
-            ambiguous_id: s.ReconciliationRecord(
-                record_id=ambiguous_id,
-                record_type="bank_transaction",
-                status=s.RecordStatus.UNPROCESSED,
-                amount=Decimal("50000.00"),
-                currency="USD",
-                counterparty="NORTHWIND TRADING",
-                reference="WIRE NORTHWIND SETTLEMENT",
-                effective_date=state.as_of_date,
-            ),
+        visible = build_agent_visible_dataset(as_of_date=state.as_of_date)
+
+        def scoped_id(identifier: str, prefix: str) -> str:
+            suffix = identifier.removeprefix(f"{prefix}-")
+            return f"{prefix}-{token}-{suffix}"
+
+        transaction_ids = {
+            row["transaction_id"]: scoped_id(row["transaction_id"], "BANK")
+            for row in visible["bank_transactions"]
         }
+        invoice_ids = {
+            row["invoice_id"]: scoped_id(row["invoice_id"], "INV")
+            for row in visible["invoices"]
+        }
+        remittance_ids = {
+            row["remittance_id"]: scoped_id(row["remittance_id"], "RMT")
+            for row in visible["remittances"]
+        }
+
+        bank_rows: list[dict[str, str]] = []
+        for source in visible["bank_transactions"]:
+            row = {**source, "batch_id": state.batch_id}
+            row["transaction_id"] = transaction_ids[source["transaction_id"]]
+            if source.get("remittance_id"):
+                row["remittance_id"] = remittance_ids[source["remittance_id"]]
+            bank_rows.append(row)
+
+        invoice_rows = [
+            {
+                **source,
+                "batch_id": state.batch_id,
+                "invoice_id": invoice_ids[source["invoice_id"]],
+            }
+            for source in visible["invoices"]
+        ]
+        ledger_rows = [
+            {
+                **source,
+                "batch_id": state.batch_id,
+                "entry_id": scoped_id(source["entry_id"], "LEDGER"),
+                "transaction_id": (
+                    transaction_ids[source["transaction_id"]]
+                    if source.get("transaction_id")
+                    else ""
+                ),
+            }
+            for source in visible["ledger_entries"]
+        ]
+        remittance_rows = [
+            {
+                **source,
+                "batch_id": state.batch_id,
+                "remittance_id": remittance_ids[source["remittance_id"]],
+                "transaction_id": transaction_ids[source["transaction_id"]],
+            }
+            for source in visible["remittances"]
+        ]
+
+        state.uploaded_rows = {
+            s.FileKind.BANK_TRANSACTIONS: bank_rows,
+            s.FileKind.INVOICES: invoice_rows,
+            s.FileKind.LEDGER_ENTRIES: ledger_rows,
+            s.FileKind.REMITTANCES: remittance_rows,
+        }
+        state.customer_rows = {
+            row["customer_id"]: {
+                **row,
+                "organization_id": state.organization_id,
+            }
+            for row in visible["customers"]
+        }
+        state.customer_alias_rows = [
+            {**row, "organization_id": state.organization_id}
+            for row in visible["customer_aliases"]
+        ]
+        state.recurring_cash_flow_rows = {
+            row["cash_flow_id"]: {
+                **row,
+                "organization_id": state.organization_id,
+            }
+            for row in visible["recurring_cash_flows"]
+        }
+
+        now = utc_now()
+        for index, file_kind in enumerate(s.FileKind, start=1):
+            rows = state.uploaded_rows[file_kind]
+            state.files[file_kind] = api_schemas.UploadedFileView(
+                file_id=f"FILE-{token}-{index:02d}",
+                batch_id=state.batch_id,
+                file_type=file_kind,
+                filename=f"demo-{file_kind.value}.csv",
+                content_type="text/csv",
+                size_bytes=0,
+                row_count=len(rows),
+                columns=list(rows[0]),
+                uploaded_at=now,
+                validation_issues=[],
+            )

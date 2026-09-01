@@ -95,7 +95,9 @@ Official references: [GPT-5.6 model guidance](https://developers.openai.com/api/
 docker compose up --build
 ```
 
-This starts PostgreSQL, Redis, and the API. Apply
+This starts the production web workspace at `http://localhost:3000`, the FastAPI service
+and OpenAPI docs at `http://localhost:8000` and `http://localhost:8000/docs`,
+PostgreSQL on `localhost:54322`, and Redis on `localhost:6379`. Apply
 `migrations/0001_cashclose_truth_layer.sql` through Supabase or `psql` before
 connecting a persistent repository implementation.
 
@@ -120,12 +122,15 @@ currency mismatches, missing remittances, ambiguity, and unreconcilable records.
 
 ```bash
 npm test
+node --test tests/cashclose-client.test.ts
 python3 -m pytest -q
 ```
 
-The Python suite covers deterministic arithmetic, matching and allocation,
-forecasting, tool guardrails, idempotency, API isolation, synthetic scenario
-counts, and evaluator metrics.
+The frontend gates include the production build, server render, typed API
+client, SSE fallback, exact-money helpers, manual review requests, and audit
+downloads. The Python suite covers deterministic arithmetic, matching and
+allocation, forecasting, tool guardrails, idempotency, API isolation,
+synthetic scenario counts, and evaluator metrics.
 
 ## Financial safety boundary
 

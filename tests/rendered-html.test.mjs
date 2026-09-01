@@ -25,8 +25,10 @@ test("server-renders the CashClose controller", async () => {
   assert.match(html, /<title>CashClose AI — Verified cash, explained<\/title>/i);
   assert.match(html, /Cash position, verified\./);
   assert.match(html, /One receipt\. Two invoices\. Zero guesswork\./);
-  assert.match(html, /Run daily close/);
-  assert.match(html, /https:\/\/cashclose\.example\/og\.png/);
+  assert.match(html, /Run controller/);
+  assert.match(html, /Interactive truth-set preview/);
+  assert.match(html, /The close is explainable/);
+  assert.match(html, /https:\/\/cashclose\.example\/og-v2\.png/);
   assert.doesNotMatch(html, /codex-preview|Your site is taking shape|react-loading-skeleton/i);
 });
 
@@ -37,10 +39,16 @@ test("ships the product asset and removes starter preview code", async () => {
     readFile(new URL("../package.json", import.meta.url), "utf8"),
   ]);
 
-  assert.match(page, /Reconciliation/);
-  assert.match(page, /ScenarioDrawer/);
+  const app = await readFile(new URL("../components/cashclose/CashCloseApp.tsx", import.meta.url), "utf8");
+  assert.match(app, /ReconciliationView/);
+  assert.match(app, /ScenarioPanel/);
+  assert.match(app, /runUploadedBatch/);
+  assert.match(app, /approveProposal/);
+  assert.match(app, /resolveException/);
+  assert.match(app, /downloadAudit/);
+  assert.match(page, /CashCloseApp/);
   assert.match(layout, /openGraph/);
   assert.doesNotMatch(packageJson, /react-loading-skeleton/);
-  await access(new URL("../public/og.png", import.meta.url));
+  await access(new URL("../public/og-v2.png", import.meta.url));
   await assert.rejects(access(new URL("app/_sites-preview/SkeletonPreview.tsx", root)));
 });

@@ -13,9 +13,20 @@ from . import schemas as s
 from .tools import FinancialToolPort
 
 
+# These flags describe a feasible allocation that a human can safely inspect and
+# explicitly approve. Contradictions such as currency mismatch, duplicate use,
+# ambiguity and unreconcilable value stay exception-only.
+HUMAN_REVIEWABLE_RISK_FLAGS = frozenset(
+    {"PARTIAL_PAYMENT", "SUSPECTED_FEE", "SUSPECTED_WITHHOLDING"}
+)
+
+
 @dataclass(frozen=True, slots=True)
 class ControllerPolicy:
-    maximum_tool_calls: int = 80
+    # The controller currently uses three validated normalization tools plus
+    # candidate, allocation, evidence, proposal, verification and commit calls
+    # per record.  Eighty calls could not process the 80-row reference batch.
+    maximum_tool_calls: int = 1_000
     maximum_records_per_run: int = 500
     maximum_same_strategy_retries: int = 1
 
@@ -160,18 +171,29 @@ class DeterministicController:
             )
             assert isinstance(evidence, s.GetMatchEvidenceResult)
 
+            risk_flags = set(evidence.risk_flags)
+            exception_only_flags = risk_flags - HUMAN_REVIEWABLE_RISK_FLAGS
             unsafe = (
                 not allocation.feasible
                 or allocation.alternatives > 1
-                or bool(evidence.risk_flags)
+                or bool(exception_only_flags)
                 or evidence.confidence < Decimal("0.7500")
             )
             if unsafe:
-                reason = (
-                    s.ExceptionReason.AMBIGUOUS_MATCH
-                    if allocation.alternatives > 1 or "MULTIPLE_EQUAL_CANDIDATES" in evidence.risk_flags
-                    else s.ExceptionReason.INSUFFICIENT_EVIDENCE
-                )
+                if "CURRENCY_MISMATCH" in evidence.risk_flags:
+                    reason = s.ExceptionReason.CURRENCY_MISMATCH
+                elif "UNRECONCILABLE" in evidence.risk_flags:
+                    reason = s.ExceptionReason.UNRECONCILABLE
+                elif "PARTIAL_PAYMENT" in evidence.risk_flags:
+                    reason = s.ExceptionReason.PARTIAL_PAYMENT
+                elif "SUSPECTED_FEE" in evidence.risk_flags:
+                    reason = s.ExceptionReason.SUSPECTED_FEE
+                elif "OVERPAYMENT" in evidence.risk_flags:
+                    reason = s.ExceptionReason.OVERPAYMENT
+                elif allocation.alternatives > 1 or "MULTIPLE_EQUAL_CANDIDATES" in evidence.risk_flags:
+                    reason = s.ExceptionReason.AMBIGUOUS_MATCH
+                else:
+                    reason = s.ExceptionReason.INSUFFICIENT_EVIDENCE
                 self._call(
                     "create_exception",
                     s.CreateExceptionInput(
@@ -215,12 +237,21 @@ class DeterministicController:
             verified = self._call("verify_match", s.VerifyMatchInput(proposal_id=proposal_id))
             assert isinstance(verified, s.VerifyMatchResult)
             if not verified.verification.approved:
+                risk_flags = set(verified.proposal.risk_flags)
+                if "PARTIAL_PAYMENT" in risk_flags:
+                    reason = s.ExceptionReason.PARTIAL_PAYMENT
+                elif "SUSPECTED_FEE" in risk_flags:
+                    reason = s.ExceptionReason.SUSPECTED_FEE
+                elif "SUSPECTED_WITHHOLDING" in risk_flags:
+                    reason = s.ExceptionReason.SUSPECTED_WITHHOLDING
+                else:
+                    reason = s.ExceptionReason.INSUFFICIENT_EVIDENCE
                 self._call(
                     "create_exception",
                     s.CreateExceptionInput(
                         batch_id=batch_id,
                         record_id=verified.proposal.transaction_id,
-                        reason_code=s.ExceptionReason.INSUFFICIENT_EVIDENCE,
+                        reason_code=reason,
                         evidence=verified.proposal.evidence,
                         next_action="Review verifier rejections before considering a manual match",
                     ),

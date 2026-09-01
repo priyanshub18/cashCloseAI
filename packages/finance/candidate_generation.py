@@ -355,11 +355,13 @@ def generate_candidates(
             and resolved_customer_id == invoice.customer_id
         )
 
-        # Retain candidates when any strong evidence family survives.  This
-        # allows partial/combined payments without admitting every invoice.
+        # Retain candidates only when an identifying signal survives, or when
+        # the amount is nearly exact.  A weak amount ratio by itself admitted
+        # almost every same-currency invoice and allowed unrelated subset sums
+        # to masquerade as valid combined payments.
         if (
             ref_similarity < Decimal("0.50")
-            and amount_similarity < active_policy.minimum_amount_ratio
+            and amount_similarity < Decimal("0.98")
             and name_similarity < active_policy.minimum_counterparty_similarity
             and not identity_match
         ):

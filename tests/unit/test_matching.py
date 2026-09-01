@@ -83,6 +83,22 @@ def test_candidate_generation_filters_and_ranks_exact_references() -> None:
     assert all(candidate.currency_compatibility == Decimal("1") for candidate in candidates)
 
 
+def test_amount_only_candidate_is_retained_but_cannot_auto_reconcile() -> None:
+    transaction = {
+        **_transaction(amount="100865.00", reference="INCOMING TRANSFER NO DETAILS 9076"),
+        "customer_id": "",
+        "counterparty": "UNKNOWN COUNTERPARTY",
+    }
+    candidates = find_candidate_invoices(
+        transaction,
+        [_invoice("INV-NOISE", "INV-2026-0046", "100600.00", customer_id="OTHER")],
+    )
+    assert len(candidates) == 1
+    result = score_candidate(candidates[0])
+    assert RiskFlag.ONLY_AMOUNT_MATCHES in result.risk_flags
+    assert result.decision != Decision.AUTO_RECONCILE
+
+
 def test_confidence_policy_is_interpretable_and_hard_flags_override_score() -> None:
     perfect = CandidateFeatures(
         reference_similarity="1",
