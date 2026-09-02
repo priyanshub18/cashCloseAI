@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date, timezone
 from decimal import Decimal
 
@@ -50,7 +51,10 @@ def deterministic_match_inputs(
     for record in records.records:
         candidates = service.invoke(
             "find_candidate_invoices",
-            s.FindCandidateInvoicesInput(transaction_id=record.record_id),
+            s.FindCandidateInvoicesInput(
+                batch_id=batch_id,
+                transaction_id=record.record_id,
+            ),
         )
         assert isinstance(candidates, s.FindCandidateInvoicesResult)
         if not candidates.candidates:
@@ -58,6 +62,7 @@ def deterministic_match_inputs(
         allocation = service.invoke(
             "solve_payment_allocation",
             s.SolvePaymentAllocationInput(
+                batch_id=batch_id,
                 transaction_id=record.record_id,
                 candidate_invoice_ids=[item.invoice_id for item in candidates.candidates],
             ),
@@ -65,6 +70,7 @@ def deterministic_match_inputs(
         evidence = service.invoke(
             "get_match_evidence",
             s.GetMatchEvidenceInput(
+                batch_id=batch_id,
                 transaction_id=record.record_id,
                 candidate_ids=[item.invoice_id for item in candidates.candidates],
             ),
@@ -149,6 +155,96 @@ def test_sse_event_feed_contains_only_actions_evidence_and_outcomes(client: Test
     assert snapshot.json()["terminal"] is True
     assert all(item["sequence"] > 2 for item in snapshot.json()["items"])
     assert snapshot.json()["next_sequence"] >= snapshot.json()["items"][-1]["sequence"]
+
+
+def test_transaction_trace_contains_complete_safe_tool_provenance(client: TestClient) -> None:
+    batch_id = create_demo_batch(client)
+    assert client.post(f"/api/batches/{batch_id}/run", json={}).status_code == 200
+    decisions = client.get(f"/api/batches/{batch_id}/matches").json()["items"]
+    record_id = decisions[0]["transaction_id"]
+
+    response = client.get(
+        f"/api/batches/{batch_id}/trace",
+        params={"record_id": record_id, "limit": 100},
+    )
+    assert response.status_code == 200, response.text
+    trace = response.json()
+    assert trace["record_id"] == record_id
+    assert trace["terminal"] is True
+    assert trace["total_matching"] == len(trace["items"])
+    expected_tools = {
+        "normalize_counterparty",
+        "normalize_reference",
+        "validate_currency_and_amount",
+        "find_candidate_invoices",
+        "solve_payment_allocation",
+        "get_match_evidence",
+        "propose_match",
+        "verify_match",
+        "commit_match",
+    }
+    assert {event["tool_name"] for event in trace["items"]} == expected_tools
+    for event in trace["items"]:
+        assert event["event_type"] == "tool_completed"
+        assert event["status"] == "succeeded"
+        assert event["agent_name"] in {"reconciliation", "verification"}
+        assert event["input_reference"]
+        assert event["tool_result_reference"]
+        assert event["latency_ms"] >= 0
+        assert "chain_of_thought" not in event["message"]
+        assert "raw_text" not in event["message"]
+
+    filtered = client.get(
+        f"/api/batches/{batch_id}/trace",
+        params={
+            "record_id": record_id,
+            "agent_name": "reconciliation",
+            "tool_name": "solve_payment_allocation",
+            "status": "succeeded",
+        },
+    ).json()
+    assert filtered["total_matching"] == 1
+    assert filtered["items"][0]["tool_result_reference"] == f"allocation:{record_id}"
+
+    unsafe_record_id = next(
+        item["record_id"]
+        for item in client.get(f"/api/batches/{batch_id}/exceptions").json()["items"]
+        if item["record_id"].startswith("BANK-") and item["proposal_id"] is None
+    )
+    unsafe_trace = client.get(
+        f"/api/batches/{batch_id}/trace",
+        params={"record_id": unsafe_record_id, "limit": 100},
+    ).json()
+    assert "create_exception" in {event["tool_name"] for event in unsafe_trace["items"]}
+
+
+def test_runtime_capabilities_gate_optional_responses_mode(client: TestClient) -> None:
+    capabilities = client.get("/api/capabilities")
+    assert capabilities.status_code == 200
+    assert capabilities.json() == {
+        "responses_mode_configured": False,
+        "responses_model": "gpt-5.6-terra",
+        "deterministic_fallback": "deterministic-controller",
+        "default_orchestration_mode": "deterministic-demo",
+        "transaction_trace_enabled": True,
+    }
+
+    batch_id = create_demo_batch(client)
+    unavailable = client.post(
+        f"/api/batches/{batch_id}/run",
+        json={"use_model_planner": True},
+    )
+    assert unavailable.status_code == 409
+    assert unavailable.json()["error"]["code"] == "MODEL_PLANNER_NOT_CONFIGURED"
+
+    configured_service = CashCloseService(
+        responses_adapter=OpenAIResponsesAdapter(api_key=None, client=object())
+    )
+    configured = TestClient(create_app(configured_service)).get("/api/capabilities").json()
+    assert configured["responses_mode_configured"] is True
+    assert configured["default_orchestration_mode"] == (
+        "responses-guided-with-deterministic-execution"
+    )
 
 
 def test_validation_preflight_reports_upload_readiness_and_missing_file_types(
@@ -258,6 +354,86 @@ def test_generated_four_file_batch_runs_through_http_and_exposes_all_records(
     )
     assert scenario.status_code == 200, scenario.text
     assert scenario.json()["currency"] == "INR"
+
+
+def test_identical_uploaded_source_ids_are_isolated_across_concurrent_batch_runs(
+    client: TestClient, tmp_path
+) -> None:
+    dataset = generate_dataset(tmp_path / "collision-fixture")
+    batch_ids: list[str] = []
+    for _ in range(2):
+        create = client.post(
+            "/api/batches",
+            json={
+                "organization_id": "ORG-TEST",
+                "demo_mode": False,
+                "as_of_date": "2026-09-01",
+            },
+        )
+        assert create.status_code == 201
+        batch_id = create.json()["batch_id"]
+        batch_ids.append(batch_id)
+        for file_type in (
+            "bank_transactions",
+            "invoices",
+            "ledger_entries",
+            "remittances",
+        ):
+            path = dataset.input_dir / f"{file_type}.csv"
+            response = client.post(
+                f"/api/batches/{batch_id}/files",
+                data={"file_type": file_type},
+                files={"file": (path.name, path.read_bytes(), "text/csv")},
+            )
+            assert response.status_code == 201, response.text
+
+    def run_batch(batch_id: str):
+        return client.post(f"/api/batches/{batch_id}/run", json={"horizon_days": 30})
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        responses = list(executor.map(run_batch, batch_ids))
+
+    assert all(response.status_code == 200 for response in responses)
+    assert all(response.json()["batch"]["status"] == "COMPLETED" for response in responses)
+    record_id_sets = []
+    for batch_id in batch_ids:
+        records = client.get(f"/api/batches/{batch_id}/records").json()["items"]
+        assert len(records) == 80
+        assert all(item["record"]["record_id"].startswith("BANK-") for item in records)
+        record_id_sets.append({item["record"]["record_id"] for item in records})
+        decisions = client.get(f"/api/batches/{batch_id}/matches").json()["items"]
+        assert decisions
+        assert all(item["batch_id"] == batch_id for item in decisions)
+    assert record_id_sets[0] == record_id_sets[1]
+
+
+def test_processing_failure_emits_safe_terminal_timeline_event(
+    service: CashCloseService, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    batch = service.create_batch(
+        CreateBatchRequest(as_of_date=date(2026, 9, 1), demo_mode=True)
+    )
+
+    def reject_candidate_lookup(_payload):
+        raise GuardrailError("candidate policy rejected the test record")
+
+    monkeypatch.setattr(service, "_tool_find_candidate_invoices", reject_candidate_lookup)
+    with pytest.raises(GuardrailError, match="candidate policy rejected"):
+        service.run_batch(batch.batch_id, RunBatchRequest())
+
+    assert service.get_batch(batch.batch_id).status is s.BatchStatus.PROCESSING_FAILED
+    failure = service.event_page(batch.batch_id).items[-1]
+    assert failure.event_type == "run_failed"
+    assert failure.status is s.EventStatus.FAILED
+    assert failure.message == "candidate policy rejected the test record"
+    failed_tools = service.get_agent_trace(
+        batch.batch_id,
+        tool_name="find_candidate_invoices",
+        status=s.EventStatus.FAILED,
+    )
+    assert failed_tools.total_matching == 1
+    assert failed_tools.items[0].event_type == "tool_failed"
+    assert failed_tools.items[0].tool_result_reference == "result:failed"
 
 
 def test_exception_can_be_resolved_with_an_explicit_auditable_resolution(
@@ -527,20 +703,38 @@ def test_commit_match_is_idempotent_and_rejects_unverified_writes(
             ),
         )
 def test_tool_catalog_hides_evaluator_ground_truth_and_adapter_is_optional() -> None:
-    names = {item["name"] for item in responses_tool_definitions()}
+    definitions = responses_tool_definitions()
+    names = {item["name"] for item in definitions}
     assert "commit_match" in names
     assert "compare_with_ground_truth" not in names
     assert "calculate_forecast_metrics" not in names
     assert "approve_match_review" not in names
     assert "reject_match_review" not in names
     assert "edit_match_review" not in names
-    assert all(item["strict"] is True for item in responses_tool_definitions())
+    assert all(item["strict"] is True for item in definitions)
+    scoped_tools = {
+        "normalize_counterparty",
+        "normalize_reference",
+        "validate_currency_and_amount",
+        "find_candidate_invoices",
+        "find_candidate_ledger_entries",
+        "parse_remittance_text",
+        "solve_payment_allocation",
+        "get_match_evidence",
+        "list_related_exceptions",
+    }
+    for definition in definitions:
+        if definition["name"] in scoped_tools:
+            assert "batch_id" in definition["parameters"]["required"]
 
     adapter = OpenAIResponsesAdapter(api_key=None)
     assert adapter.is_configured is False
     request = adapter.build_request({"batch_id": "BATCH-TEST", "status": "UPLOADED"})
     assert request["model"] == "gpt-5.6-terra"
-    assert request["store"] is False
+    # The bounded two-turn path uses previous_response_id, so the prior response
+    # must remain available for the continuation. Planner payloads contain only
+    # batch metadata and structured validation summaries.
+    assert request["store"] is True
     assert "compare_with_ground_truth" not in {tool["name"] for tool in request["tools"]}
 
 

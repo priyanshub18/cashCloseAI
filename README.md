@@ -22,6 +22,10 @@ ground truth.
 - Confirmed, expected, and risk-adjusted forecast lines using Recharts
 - Interactive “Acme pays seven days late” scenario and corrective action
 - Replayable controller timeline that exposes tool actions—not hidden reasoning
+- Searchable transaction trace with observe, normalize, candidate, allocation,
+  evidence, verification, and commit/exception gates for every bank record
+- Truthful execution badges: deterministic runs never claim an OpenAI call, and
+  Agentic Responses is selectable only when the API reports it is configured
 - Audit/evaluation scorecard and downloadable audit JSON
 - CSV upload preflight experience for bank, invoice, ledger, and remittance data
 - Full requested REST API and Server-Sent Events endpoint
@@ -80,10 +84,19 @@ curl -X POST http://localhost:8000/api/batches/BATCH-0001/run \
   -d '{"horizon_days":30,"use_model_planner":false}'
 ```
 
-Set `OPENAI_API_KEY` and send `"use_model_planner": true` only when you want
-the optional Responses planner. The adapter defaults to `gpt-5.6-terra`, uses
-strict function schemas, disables parallel financial calls, and cannot access
-evaluator ground truth. Confirm model access for the target OpenAI account.
+Copy `.env.example` to `.env`, set `OPENAI_API_KEY`, and send
+`"use_model_planner": true` only when you want the Responses-guided mode. The
+adapter defaults to `gpt-5.6-terra` (override it with
+`OPENAI_MODEL_CONTROLLER`), executes a bounded two-turn plan, uses strict
+function schemas, and cannot access evaluator ground truth. The first turn may
+choose one to three read-only batch observations; the second must choose one
+validated controller strategy. Financial calculations and writes remain in the
+deterministic tool layer. Confirm model access for the target OpenAI account.
+
+The two Responses turns use `previous_response_id`, so those planner responses
+are stored for continuity. Only batch metadata and structured validation
+summaries are sent through this planning path—not raw CSV rows or financial
+write payloads.
 
 Official references: [GPT-5.6 model guidance](https://developers.openai.com/api/docs/guides/latest-model),
 [GPT-5.6 Terra](https://developers.openai.com/api/docs/models/gpt-5.6-terra), and
@@ -100,6 +113,32 @@ and OpenAPI docs at `http://localhost:8000` and `http://localhost:8000/docs`,
 PostgreSQL on `localhost:54322`, and Redis on `localhost:6379`. Apply
 `migrations/0001_cashclose_truth_layer.sql` through Supabase or `psql` before
 connecting a persistent repository implementation.
+
+Open **New close batch → Execution mode** in the UI. When the API key is
+available, **Agentic Responses** is offered; otherwise the only selectable mode
+is the honestly labeled **Deterministic demo**. Open **Agent trace** during or
+after a run to inspect each transaction and its recorded tool outcomes.
+
+The deterministic demo can finish in a fraction of a second because it runs
+local, in-memory validated functions with no model-network round trips. That is
+real measured runtime, not an animation. Responses-guided mode adds two bounded
+network turns, and the SSE trace records their start, completion, model,
+response references, and latency.
+
+## Sample CSV upload
+
+Upload the four files from `demo_data/input/`:
+
+- `bank_transactions.csv`
+- `invoices.csv`
+- `ledger_entries.csv`
+- `remittances.csv`
+
+For convenience, the same four files are bundled in
+`cashclose-sample-upload.zip`. Customer aliases and recurring cash flows remain
+part of the built-in demo fixture; the four-file upload contract is sufficient
+to exercise reconciliation, exceptions, forecasting, evaluation, and the new
+transaction trace.
 
 ## Synthetic truth layer
 

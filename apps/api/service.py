@@ -19,7 +19,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from packages.agents.controller import DeterministicController
+from packages.agents.controller import ControllerLimitError, DeterministicController
 from packages.agents.openai_adapter import OpenAIAdapterNotConfigured, OpenAIResponsesAdapter
 from packages.agents import schemas as s
 from packages.agents.tools import TOOL_CONTRACTS, validate_tool_input, validate_tool_output
@@ -56,6 +56,30 @@ TERMINAL_RECORD_STATUSES = {
     s.RecordStatus.NEEDS_REVIEW,
     s.RecordStatus.UNRESOLVED,
     s.RecordStatus.REJECTED,
+}
+TRACE_TOOL_AGENTS: dict[str, s.AgentName] = {
+    "normalize_counterparty": s.AgentName.RECONCILIATION,
+    "normalize_reference": s.AgentName.RECONCILIATION,
+    "validate_currency_and_amount": s.AgentName.RECONCILIATION,
+    "find_candidate_invoices": s.AgentName.RECONCILIATION,
+    "solve_payment_allocation": s.AgentName.RECONCILIATION,
+    "get_match_evidence": s.AgentName.RECONCILIATION,
+    "propose_match": s.AgentName.RECONCILIATION,
+    "create_exception": s.AgentName.RECONCILIATION,
+    "verify_match": s.AgentName.VERIFICATION,
+    "commit_match": s.AgentName.VERIFICATION,
+    "request_human_review": s.AgentName.VERIFICATION,
+    "resolve_exception": s.AgentName.VERIFICATION,
+    "edit_match_review": s.AgentName.VERIFICATION,
+    "approve_match_review": s.AgentName.VERIFICATION,
+    "reject_match_review": s.AgentName.VERIFICATION,
+    "calculate_verified_cash": s.AgentName.FORECAST,
+    "run_cash_forecast": s.AgentName.FORECAST,
+    "run_monte_carlo_forecast": s.AgentName.FORECAST,
+    "simulate_cash_action": s.AgentName.FORECAST,
+    "calculate_match_metrics": s.AgentName.EVALUATION,
+    "calculate_forecast_metrics": s.AgentName.EVALUATION,
+    "generate_audit_report": s.AgentName.EVALUATION,
 }
 REQUIRED_CSV_COLUMN_GROUPS: dict[s.FileKind, tuple[frozenset[str], ...]] = {
     s.FileKind.BANK_TRANSACTIONS: tuple(
@@ -347,49 +371,89 @@ class CashCloseService:
             state.processing_started_at = time.monotonic()
 
         mode = "deterministic-demo"
+        guided_plan: s.ModelGuidedRunPlan | None = None
         if request.use_model_planner:
             if not self.responses_adapter.is_configured:
                 raise OpenAIAdapterNotConfigured(
                     "model planning was requested but OPENAI_API_KEY is not configured"
                 )
-            plan = self.responses_adapter.plan(
-                {
-                    "batch_id": batch_id,
-                    "status": s.BatchStatus.UPLOADED.value,
-                    "objective": "Choose the first safe inspection or validation tool",
-                }
-            )
-            disallowed = [
-                call.tool_name
-                for call in plan.calls
-                if call.tool_name not in {"inspect_batch", "validate_batch", "get_batch_summary"}
-            ]
-            if disallowed:
-                raise GuardrailError(
-                    "initial model plan crossed its observe-only authorization boundary"
-                )
-            mode = "responses-guided-with-deterministic-execution"
-            self.emit(
-                batch_id,
-                agent_name=s.AgentName.CONTROLLER,
-                event_type="model_plan_validated",
-                message=f"Validated {len(plan.calls)} model-selected observe-only tool calls",
-                tool_result_reference=f"response:{plan.response_id}",
-            )
 
         controller = DeterministicController(self)
         try:
+            if request.use_model_planner:
+                self.emit(
+                    batch_id,
+                    agent_name=s.AgentName.CONTROLLER,
+                    event_type="model_planning_started",
+                    message=(
+                        "Requested a bounded OpenAI Responses plan using "
+                        f"{self.responses_adapter.config.model}"
+                    ),
+                    status=s.EventStatus.STARTED,
+                    input_reference=f"batch:{batch_id}",
+                )
+                planner_started_at = time.perf_counter()
+                guided_plan = self.responses_adapter.orchestrate_run(
+                    {
+                        "batch_id": batch_id,
+                        "status": s.BatchStatus.UPLOADED.value,
+                        "objective": (
+                            "Choose bounded read-only observations, then select the "
+                            "deterministic controller strategy"
+                        ),
+                    },
+                    execute_tool=lambda tool_name, arguments: self.invoke(
+                        tool_name, arguments
+                    ),
+                )
+                planner_latency_ms = max(
+                    0, round((time.perf_counter() - planner_started_at) * 1_000)
+                )
+                self.emit(
+                    batch_id,
+                    agent_name=s.AgentName.CONTROLLER,
+                    event_type="model_planning_completed",
+                    message=(
+                        f"{guided_plan.provenance.provider}/"
+                        f"{guided_plan.provenance.model} completed the bounded "
+                        f"two-turn plan in {planner_latency_ms} ms"
+                    ),
+                    tool_name="select_controller_strategy",
+                    input_reference=(
+                        f"response:{guided_plan.provenance.response_ids[0]}"
+                    ),
+                    tool_result_reference=(
+                        f"response:{guided_plan.provenance.response_ids[1]}"
+                    ),
+                    latency_ms=planner_latency_ms,
+                )
+                mode = "responses-guided-with-deterministic-execution"
             result = controller.run(
                 batch_id,
                 as_of_date=self._get_batch(batch_id).as_of_date,
                 horizon_days=request.horizon_days,
+                strategy=guided_plan.strategy if guided_plan else None,
+                model_provenance=guided_plan.provenance if guided_plan else None,
             )
-        except Exception:
+        except Exception as exc:
             with self._lock:
                 state = self._get_batch(batch_id)
                 if not state.status.terminal:
                     state.status = s.BatchStatus.PROCESSING_FAILED
                     state.updated_at = utc_now()
+                safe_detail = (
+                    str(exc)
+                    if isinstance(exc, (DomainError, ControllerLimitError))
+                    else "Unexpected processing error; inspect the server logs for details"
+                )
+                self.emit(
+                    batch_id,
+                    agent_name=s.AgentName.CONTROLLER,
+                    event_type="run_failed",
+                    message=safe_detail,
+                    status=s.EventStatus.FAILED,
+                    input_reference=f"batch:{batch_id}",
+                )
             raise
         finally:
             with self._lock:
@@ -641,6 +705,54 @@ class CashCloseService:
                 terminal=state.status.terminal,
             )
 
+    def get_runtime_capabilities(self) -> api_schemas.RuntimeCapabilitiesView:
+        configured = self.responses_adapter.is_configured
+        return api_schemas.RuntimeCapabilitiesView(
+            responses_mode_configured=configured,
+            responses_model=self.responses_adapter.config.model,
+            deterministic_fallback="deterministic-controller",
+            default_orchestration_mode=(
+                "responses-guided-with-deterministic-execution"
+                if configured
+                else "deterministic-demo"
+            ),
+            transaction_trace_enabled=True,
+        )
+
+    def get_agent_trace(
+        self,
+        batch_id: str,
+        *,
+        after_sequence: int = 0,
+        limit: int = 500,
+        record_id: str | None = None,
+        agent_name: s.AgentName | None = None,
+        tool_name: str | None = None,
+        status: s.EventStatus | None = None,
+    ) -> api_schemas.AgentTraceView:
+        with self._lock:
+            state = self._get_batch(batch_id)
+            matching = [
+                event
+                for event in state.events
+                if (record_id is None or self._event_matches_record(state, event, record_id))
+                and (agent_name is None or event.agent_name is agent_name)
+                and (tool_name is None or event.tool_name == tool_name)
+                and (status is None or event.status is status)
+            ]
+            page = [event for event in matching if event.sequence > after_sequence][:limit]
+            return api_schemas.AgentTraceView(
+                batch_id=batch_id,
+                record_id=record_id,
+                agent_name=agent_name,
+                tool_name=tool_name,
+                status=status,
+                items=page,
+                next_sequence=page[-1].sequence if page else after_sequence,
+                total_matching=len(matching),
+                terminal=state.status.terminal,
+            )
+
     # ------------------------------------------------------------------
     # Agent runtime port
     # ------------------------------------------------------------------
@@ -653,11 +765,39 @@ class CashCloseService:
         if handler is None:
             raise GuardrailError(f"tool {tool_name} is contracted but has no implementation")
         with self._lock:
-            result = handler(validated_input)
-            validated_output = validate_tool_output(tool_name, result)
+            started_at = time.perf_counter()
+            input_batch_id = self._batch_id_for_tool_input(validated_input)
+            try:
+                result = handler(validated_input)
+                validated_output = validate_tool_output(tool_name, result)
+            except Exception as exc:
+                if input_batch_id and tool_name in TRACE_TOOL_AGENTS:
+                    self._emit_tool_trace(
+                        batch_id=input_batch_id,
+                        tool_name=tool_name,
+                        input_model=validated_input,
+                        output_model=None,
+                        latency_ms=max(
+                            0,
+                            round((time.perf_counter() - started_at) * 1_000),
+                        ),
+                        error=exc,
+                    )
+                raise
             batch_id = self._batch_id_for_tool_call(validated_input, validated_output)
             if batch_id and batch_id in self._batches:
                 self._batches[batch_id].tool_calls.append((tool_name, utc_now()))
+                if tool_name in TRACE_TOOL_AGENTS:
+                    self._emit_tool_trace(
+                        batch_id=batch_id,
+                        tool_name=tool_name,
+                        input_model=validated_input,
+                        output_model=validated_output,
+                        latency_ms=max(
+                            0,
+                            round((time.perf_counter() - started_at) * 1_000),
+                        ),
+                    )
             return validated_output
 
     def transition(self, batch_id: str, status: s.BatchStatus) -> None:
@@ -694,6 +834,7 @@ class CashCloseService:
         tool_name: str | None = None,
         input_reference: str | None = None,
         tool_result_reference: str | None = None,
+        latency_ms: int = 0,
     ) -> None:
         with self._lock:
             state = self._get_batch(batch_id)
@@ -708,7 +849,7 @@ class CashCloseService:
                     tool_name=tool_name,
                     tool_result_reference=tool_result_reference,
                     timestamp=utc_now(),
-                    latency_ms=0,
+                    latency_ms=latency_ms,
                     status=status,
                 )
             )
@@ -814,15 +955,19 @@ class CashCloseService:
             nonterminal_record_ids=nonterminal,
         )
 
-    def _record(self, record_id: str) -> tuple[BatchState, s.ReconciliationRecord]:
-        for state in self._batches.values():
-            record = state.records.get(record_id)
-            if record is not None:
-                return state, record
-        raise NotFoundError(f"record {record_id} was not found")
+    def _record(
+        self, batch_id: str, record_id: str
+    ) -> tuple[BatchState, s.ReconciliationRecord]:
+        state = self._get_batch(batch_id)
+        try:
+            return state, state.records[record_id]
+        except KeyError as exc:
+            raise NotFoundError(
+                f"record {record_id} was not found in batch {batch_id}"
+            ) from exc
 
     def _tool_normalize_counterparty(self, payload: s.NormalizeRecordInput) -> s.NormalizeResult:
-        _, record = self._record(payload.record_id)
+        _, record = self._record(payload.batch_id, payload.record_id)
         normalized = finance_normalize_counterparty(record.counterparty)
         return s.NormalizeResult(
             record_id=payload.record_id,
@@ -831,7 +976,7 @@ class CashCloseService:
         )
 
     def _tool_normalize_reference(self, payload: s.NormalizeRecordInput) -> s.NormalizeResult:
-        _, record = self._record(payload.record_id)
+        _, record = self._record(payload.batch_id, payload.record_id)
         normalized = finance_normalize_reference(record.reference)
         return s.NormalizeResult(
             record_id=payload.record_id,
@@ -860,7 +1005,7 @@ class CashCloseService:
     def _tool_validate_currency_and_amount(
         self, payload: s.ValidateCurrencyAmountInput
     ) -> s.ValidateCurrencyAmountResult:
-        _, record = self._record(payload.record_id)
+        _, record = self._record(payload.batch_id, payload.record_id)
         validated = finance_validate_currency_and_amount(
             record.amount, record.currency, allow_zero=False
         )
@@ -875,7 +1020,7 @@ class CashCloseService:
     def _tool_find_candidate_invoices(
         self, payload: s.FindCandidateInvoicesInput
     ) -> s.FindCandidateInvoicesResult:
-        state, record = self._record(payload.transaction_id)
+        state, record = self._record(payload.batch_id, payload.transaction_id)
         if state.invoice_rows:
             return self._find_uploaded_candidate_invoices(state, record, payload.limit)
         token = state.batch_id.split("-")[-1]
@@ -944,7 +1089,7 @@ class CashCloseService:
     def _tool_find_candidate_ledger_entries(
         self, payload: s.FindCandidateLedgerEntriesInput
     ) -> s.FindCandidateLedgerEntriesResult:
-        _, record = self._record(payload.transaction_id)
+        _, record = self._record(payload.batch_id, payload.transaction_id)
         return s.FindCandidateLedgerEntriesResult(
             transaction_id=payload.transaction_id,
             candidates=[
@@ -960,6 +1105,7 @@ class CashCloseService:
     def _tool_parse_remittance_text(
         self, payload: s.ParseRemittanceTextInput
     ) -> s.ParseRemittanceTextResult:
+        self._get_batch(payload.batch_id)
         if payload.remittance_id.endswith("-0042"):
             return s.ParseRemittanceTextResult(
                 remittance_id=payload.remittance_id,
@@ -979,7 +1125,7 @@ class CashCloseService:
     def _tool_solve_payment_allocation(
         self, payload: s.SolvePaymentAllocationInput
     ) -> s.SolvePaymentAllocationResult:
-        state, record = self._record(payload.transaction_id)
+        state, record = self._record(payload.batch_id, payload.transaction_id)
         if state.invoice_rows:
             return self._solve_uploaded_payment_allocation(state, record, payload)
         candidate_cache = state.candidate_results.get(payload.transaction_id)
@@ -1049,7 +1195,7 @@ class CashCloseService:
     def _tool_get_match_evidence(
         self, payload: s.GetMatchEvidenceInput
     ) -> s.GetMatchEvidenceResult:
-        state, _ = self._record(payload.transaction_id)
+        state, _ = self._record(payload.batch_id, payload.transaction_id)
         if state.invoice_rows:
             return self._get_uploaded_match_evidence(state, payload)
         candidates = state.candidate_results.get(payload.transaction_id)
@@ -1134,7 +1280,7 @@ class CashCloseService:
 
     def _tool_propose_match(self, payload: s.ProposeMatchInput) -> s.ProposeMatchResult:
         state = self._get_batch(payload.batch_id)
-        _, record = self._record(payload.transaction_id)
+        _, record = self._record(payload.batch_id, payload.transaction_id)
         if record.amount != payload.transaction_amount or record.currency != payload.currency:
             raise GuardrailError("proposal amount and currency must match the stored transaction")
         solved = state.allocation_results.get(payload.transaction_id)
@@ -1259,7 +1405,7 @@ class CashCloseService:
 
     def _tool_create_exception(self, payload: s.CreateExceptionInput) -> s.CreateExceptionResult:
         state = self._get_batch(payload.batch_id)
-        _, record = self._record(payload.record_id)
+        _, record = self._record(payload.batch_id, payload.record_id)
         for existing in state.exceptions.values():
             if existing.record_id == payload.record_id and existing.status is not s.ExceptionStatus.RESOLVED:
                 return s.CreateExceptionResult(exception=existing)
@@ -1300,10 +1446,10 @@ class CashCloseService:
     def _tool_list_related_exceptions(
         self, payload: s.ListRelatedExceptionsInput
     ) -> s.ListRelatedExceptionsResult:
+        state = self._get_batch(payload.batch_id)
         return s.ListRelatedExceptionsResult(
             exceptions=[
                 exception
-                for state in self._batches.values()
                 for exception in state.exceptions.values()
                 if exception.record_id == payload.record_id
             ]
@@ -2808,8 +2954,225 @@ class CashCloseService:
                 return state, forecast
         raise NotFoundError(f"forecast {forecast_id} was not found")
 
+    def _batch_id_for_tool_input(self, input_model: BaseModel) -> str | None:
+        direct = getattr(input_model, "batch_id", None)
+        if direct:
+            return str(direct)
+        lookups = (
+            ("proposal_id", "proposals"),
+            ("exception_id", "exceptions"),
+            ("forecast_id", "forecasts"),
+        )
+        for attribute, collection_name in lookups:
+            identifier = getattr(input_model, attribute, None)
+            if not identifier:
+                continue
+            for state in self._batches.values():
+                if identifier in getattr(state, collection_name):
+                    return state.batch_id
+        return None
+
+    def _emit_tool_trace(
+        self,
+        *,
+        batch_id: str,
+        tool_name: str,
+        input_model: BaseModel,
+        output_model: BaseModel | None,
+        latency_ms: int,
+        error: Exception | None = None,
+    ) -> None:
+        if batch_id not in self._batches:
+            return
+        if error is None:
+            event_type = "tool_completed"
+            status = s.EventStatus.SUCCEEDED
+            message = self._tool_outcome(tool_name, output_model)
+            result_reference = self._tool_result_reference(
+                batch_id, tool_name, input_model, output_model
+            )
+        else:
+            event_type = "tool_failed"
+            status = s.EventStatus.FAILED
+            safe_detail = (
+                str(error)
+                if isinstance(error, (DomainError, ControllerLimitError))
+                else "unexpected tool error"
+            )
+            message = f"{tool_name} failed: {safe_detail}"[:500]
+            result_reference = "result:failed"
+        self.emit(
+            batch_id,
+            agent_name=TRACE_TOOL_AGENTS[tool_name],
+            event_type=event_type,
+            message=message,
+            status=status,
+            tool_name=tool_name,
+            input_reference=self._tool_input_reference(input_model),
+            tool_result_reference=result_reference,
+            latency_ms=latency_ms,
+        )
+
     @staticmethod
-    def _batch_id_for_tool_call(input_model: BaseModel, output_model: BaseModel) -> str | None:
+    def _tool_input_reference(input_model: BaseModel) -> str:
+        for attribute, prefix in (
+            ("transaction_id", "record"),
+            ("record_id", "record"),
+            ("proposal_id", "proposal"),
+            ("exception_id", "exception"),
+            ("forecast_id", "forecast"),
+            ("batch_id", "batch"),
+        ):
+            value = getattr(input_model, attribute, None)
+            if value:
+                return f"{prefix}:{value}"
+        return "input:validated"
+
+    @staticmethod
+    def _tool_result_reference(
+        batch_id: str,
+        tool_name: str,
+        input_model: BaseModel,
+        output_model: BaseModel | None,
+    ) -> str:
+        transaction_id = getattr(output_model, "transaction_id", None) or getattr(
+            input_model, "transaction_id", None
+        )
+        if tool_name == "validate_currency_and_amount":
+            return f"record:{getattr(input_model, 'record_id')}:validation"
+        if tool_name == "normalize_counterparty":
+            return f"record:{getattr(input_model, 'record_id')}:counterparty-normalized"
+        if tool_name == "normalize_reference":
+            return f"record:{getattr(input_model, 'record_id')}:reference-normalized"
+        if tool_name == "find_candidate_invoices":
+            return f"candidate-set:{transaction_id}"
+        if tool_name == "solve_payment_allocation":
+            return f"allocation:{transaction_id}"
+        if tool_name == "get_match_evidence":
+            return f"evidence:{transaction_id}"
+        if tool_name in {"run_cash_forecast", "run_monte_carlo_forecast", "simulate_cash_action"}:
+            return f"forecast:{getattr(output_model, 'forecast_id')}"
+        if tool_name == "calculate_verified_cash":
+            return f"cash-position:{batch_id}"
+        if tool_name in {"calculate_match_metrics", "calculate_forecast_metrics"}:
+            return f"metrics:{batch_id}"
+        if tool_name == "generate_audit_report":
+            return f"audit:{getattr(output_model, 'report_id')}"
+        if tool_name == "verify_match":
+            verification = getattr(output_model, "verification", None)
+            return f"verification:{getattr(verification, 'proposal_id')}"
+        if tool_name in {"commit_match", "approve_match_review", "reject_match_review"}:
+            decision = getattr(output_model, "decision", None)
+            if decision is not None:
+                return f"decision:{decision.decision_id}"
+        if tool_name in {"create_exception", "request_human_review", "resolve_exception"}:
+            exception = getattr(output_model, "exception", None)
+            if exception is not None:
+                return f"exception:{exception.exception_id}"
+        proposal = getattr(output_model, "proposal", None)
+        if proposal is not None:
+            return f"proposal:{proposal.proposal_id}"
+        return f"result:{tool_name}"
+
+    @staticmethod
+    def _tool_outcome(tool_name: str, output_model: BaseModel | None) -> str:
+        if isinstance(output_model, s.NormalizeResult):
+            subject = "counterparty" if tool_name == "normalize_counterparty" else "reference"
+            return f"Normalized stored {subject}"
+        if isinstance(output_model, s.ValidateCurrencyAmountResult):
+            return "Validated stored currency and amount"
+        if isinstance(output_model, s.FindCandidateInvoicesResult):
+            return f"Found {len(output_model.candidates)} bounded invoice candidates"
+        if isinstance(output_model, s.SolvePaymentAllocationResult):
+            return (
+                "Solved allocation: "
+                f"feasible={str(output_model.feasible).lower()}, "
+                f"allocations={len(output_model.allocations)}, "
+                f"alternatives={output_model.alternatives}"
+            )
+        if isinstance(output_model, s.GetMatchEvidenceResult):
+            return (
+                f"Assembled {len(output_model.evidence)} evidence items; "
+                f"confidence={output_model.confidence}; "
+                f"risk_flags={len(output_model.risk_flags)}"
+            )
+        if isinstance(output_model, s.ProposeMatchResult):
+            proposal = output_model.proposal
+            return (
+                f"Created proposal with {len(proposal.allocations)} allocations; "
+                f"confidence={proposal.confidence}"
+            )
+        if isinstance(output_model, s.VerifyMatchResult):
+            verification = output_model.verification
+            outcome = "approved" if verification.approved else "requires review"
+            return f"Verification {outcome}; reasons={len(verification.reasons)}"
+        if isinstance(output_model, s.CommitMatchResult):
+            replay = "; idempotent replay" if output_model.idempotent_replay else ""
+            return f"Committed {output_model.decision.decision.value} decision{replay}"
+        if isinstance(output_model, s.CreateExceptionResult):
+            return f"Created {output_model.exception.reason_code.value} exception"
+        if isinstance(output_model, s.ExceptionMutationResult):
+            return f"Exception status is {output_model.exception.status.value}"
+        if isinstance(output_model, s.EditMatchResult):
+            return f"Validated proposal revision {output_model.proposal.revision}"
+        if isinstance(output_model, s.HumanReviewResult):
+            return f"Human review completed with {output_model.proposal.status.value} proposal"
+        if isinstance(output_model, s.CalculateVerifiedCashResult):
+            return (
+                f"Calculated verified {output_model.currency} cash from "
+                f"{output_model.source_transaction_count} sources"
+            )
+        if isinstance(output_model, s.RunCashForecastResult):
+            return (
+                f"Produced {output_model.horizon_days}-day {output_model.currency} forecast; "
+                f"shortfall={'yes' if output_model.shortfall_date else 'no'}"
+            )
+        if isinstance(output_model, s.MatchMetricsResult):
+            return "Calculated deterministic reconciliation metrics"
+        if isinstance(output_model, s.ForecastMetricsResult):
+            return f"Calculated forecast metrics for {output_model.evaluated_days} days"
+        if isinstance(output_model, s.AuditReportResult):
+            return f"Generated audit report with {len(output_model.entries)} entries"
+        return f"{tool_name} completed"
+
+    @staticmethod
+    def _event_matches_record(
+        state: BatchState, event: s.AgentEvent, record_id: str
+    ) -> bool:
+        references = {
+            f"record:{record_id}",
+            f"record:{record_id}:counterparty-normalized",
+            f"record:{record_id}:reference-normalized",
+            f"record:{record_id}:validation",
+            f"candidate-set:{record_id}",
+            f"allocation:{record_id}",
+            f"evidence:{record_id}",
+        }
+        proposal_ids = {
+            proposal.proposal_id
+            for proposal in state.proposals.values()
+            if proposal.transaction_id == record_id
+        }
+        references.update(f"proposal:{proposal_id}" for proposal_id in proposal_ids)
+        references.update(f"verification:{proposal_id}" for proposal_id in proposal_ids)
+        references.update(
+            f"decision:{decision.decision_id}"
+            for decision in state.decisions.values()
+            if decision.transaction_id == record_id
+        )
+        references.update(
+            f"exception:{exception.exception_id}"
+            for exception in state.exceptions.values()
+            if exception.record_id == record_id
+        )
+        return (
+            event.input_reference in references
+            or event.tool_result_reference in references
+        )
+
+    def _batch_id_for_tool_call(
+        self, input_model: BaseModel, output_model: BaseModel
+    ) -> str | None:
         batch_id = getattr(input_model, "batch_id", None) or getattr(output_model, "batch_id", None)
         if batch_id:
             return str(batch_id)
@@ -2817,7 +3180,7 @@ class CashCloseService:
             nested = getattr(output_model, attribute, None)
             if nested is not None and getattr(nested, "batch_id", None):
                 return str(nested.batch_id)
-        return None
+        return self._batch_id_for_tool_input(input_model)
 
     @staticmethod
     def _batch_view(state: BatchState) -> api_schemas.BatchView:

@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from decimal import Decimal
 from enum import StrEnum
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import Field, StringConstraints, model_validator
 
@@ -166,6 +166,29 @@ class BatchValidationView(ApiSchema):
 class AgentEventPage(ApiSchema):
     items: list[agent_schemas.AgentEvent]
     next_sequence: int = Field(ge=0)
+    terminal: bool
+
+
+class RuntimeCapabilitiesView(ApiSchema):
+    responses_mode_configured: bool
+    responses_model: Annotated[str, Field(min_length=1, max_length=100)]
+    deterministic_fallback: Literal["deterministic-controller"]
+    default_orchestration_mode: Literal[
+        "responses-guided-with-deterministic-execution",
+        "deterministic-demo",
+    ]
+    transaction_trace_enabled: bool = True
+
+
+class AgentTraceView(ApiSchema):
+    batch_id: Identifier
+    record_id: Identifier | None = None
+    agent_name: agent_schemas.AgentName | None = None
+    tool_name: str | None = Field(default=None, min_length=1, max_length=100)
+    status: agent_schemas.EventStatus | None = None
+    items: list[agent_schemas.AgentEvent]
+    next_sequence: int = Field(ge=0)
+    total_matching: int = Field(ge=0)
     terminal: bool
 
 

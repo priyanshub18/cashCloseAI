@@ -22,6 +22,8 @@ services:
     environment:
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/postgres
       REDIS_URL: redis://redis:6379/0
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL_CONTROLLER: ${OPENAI_MODEL_CONTROLLER:-gpt-5.6-terra}
     ports:
       - "8000:8000"
     depends_on:

@@ -53,10 +53,32 @@ class DeterministicController:
         self._tool_calls += 1
         return self.tools.invoke(name, arguments)
 
-    def run(self, batch_id: str, *, as_of_date: date, horizon_days: int = 30) -> s.ControllerRunResult:
+    def run(
+        self,
+        batch_id: str,
+        *,
+        as_of_date: date,
+        horizon_days: int = 30,
+        strategy: s.ControllerStrategy | None = None,
+        model_provenance: s.ModelOrchestrationProvenance | None = None,
+    ) -> s.ControllerRunResult:
         self._tool_calls = 0
         automatic_matches = 0
         exceptions_created = 0
+        active_strategy = strategy or s.ControllerStrategy(
+            batch_id=batch_id,
+            record_order="source_order",
+            candidate_search="balanced",
+            forecast_method="monte_carlo",
+            monte_carlo_simulations=500,
+        )
+        if active_strategy.batch_id != batch_id:
+            raise ValueError("controller strategy is not authorized for this batch")
+        if model_provenance is not None:
+            if model_provenance.strategy != active_strategy:
+                raise ValueError("model provenance does not match the controller strategy")
+            if model_provenance.strategy.batch_id != batch_id:
+                raise ValueError("model provenance is not authorized for this batch")
 
         self.tools.emit(
             batch_id,
@@ -65,6 +87,39 @@ class DeterministicController:
             message="Controller started a bounded reconciliation run",
             status=s.EventStatus.STARTED,
         )
+        if model_provenance is not None:
+            for choice in model_provenance.tool_choices:
+                self.tools.emit(
+                    batch_id,
+                    agent_name=s.AgentName.CONTROLLER,
+                    event_type="model_tool_selected",
+                    message=(
+                        f"{model_provenance.provider}/{model_provenance.model} response "
+                        f"{choice.response_id} selected {choice.tool_name}; "
+                        f"outcome={choice.outcome}"
+                    ),
+                    tool_name=choice.tool_name,
+                    input_reference=f"response:{choice.response_id}",
+                    tool_result_reference=f"call:{choice.call_id}",
+                )
+            self.tools.emit(
+                batch_id,
+                agent_name=s.AgentName.CONTROLLER,
+                event_type="model_strategy_applied",
+                message=(
+                    f"Applied {model_provenance.provider}/{model_provenance.model} strategy: "
+                    f"record_order={active_strategy.record_order}, "
+                    f"candidate_search={active_strategy.candidate_search}, "
+                    f"forecast_method={active_strategy.forecast_method}, "
+                    f"monte_carlo_simulations={active_strategy.monte_carlo_simulations}"
+                ),
+                tool_name="select_controller_strategy",
+                input_reference=f"response:{model_provenance.response_ids[-1]}",
+                tool_result_reference=(
+                    f"strategy:{active_strategy.record_order}:"
+                    f"{active_strategy.candidate_search}:{active_strategy.forecast_method}"
+                ),
+            )
         self.tools.transition(batch_id, s.BatchStatus.VALIDATING)
         inspection = self._call("inspect_batch", s.InspectBatchInput(batch_id=batch_id))
         assert isinstance(inspection, s.InspectBatchResult)
@@ -95,6 +150,7 @@ class DeterministicController:
                 tool_calls=self._tool_calls,
                 automatic_matches=0,
                 exceptions_created=0,
+                model_provenance=model_provenance,
             )
 
         warning_count = sum(issue.count for issue in validation.issues)
@@ -112,24 +168,40 @@ class DeterministicController:
             s.GetUnprocessedRecordsInput(batch_id=batch_id, limit=self.policy.maximum_records_per_run),
         )
         assert isinstance(records_result, s.GetUnprocessedRecordsResult)
-        for record in records_result.records:
-            self._call("normalize_counterparty", s.NormalizeRecordInput(record_id=record.record_id))
-            self._call("normalize_reference", s.NormalizeRecordInput(record_id=record.record_id))
-            self._call("validate_currency_and_amount", s.ValidateCurrencyAmountInput(record_id=record.record_id))
+        records = list(records_result.records)
+        if active_strategy.record_order == "highest_value_first":
+            records.sort(key=lambda record: (-abs(record.amount), record.record_id))
+        for record in records:
+            self._call(
+                "normalize_counterparty",
+                s.NormalizeRecordInput(batch_id=batch_id, record_id=record.record_id),
+            )
+            self._call(
+                "normalize_reference",
+                s.NormalizeRecordInput(batch_id=batch_id, record_id=record.record_id),
+            )
+            self._call(
+                "validate_currency_and_amount",
+                s.ValidateCurrencyAmountInput(batch_id=batch_id, record_id=record.record_id),
+            )
         self.tools.emit(
             batch_id,
             agent_name=s.AgentName.RECONCILIATION,
             event_type="records_normalized",
-            message=f"Normalized {len(records_result.records)} eligible records using validated transforms",
+            message=f"Normalized {len(records)} eligible records using validated transforms",
             tool_name="normalize_reference",
         )
 
         self.tools.transition(batch_id, s.BatchStatus.RECONCILING)
         proposal_ids: list[str] = []
-        for record in records_result.records:
+        for record in records:
             candidates = self._call(
                 "find_candidate_invoices",
-                s.FindCandidateInvoicesInput(transaction_id=record.record_id, limit=20),
+                s.FindCandidateInvoicesInput(
+                    batch_id=batch_id,
+                    transaction_id=record.record_id,
+                    limit=active_strategy.candidate_limit,
+                ),
             )
             assert isinstance(candidates, s.FindCandidateInvoicesResult)
             if not candidates.candidates:
@@ -157,6 +229,7 @@ class DeterministicController:
             allocation = self._call(
                 "solve_payment_allocation",
                 s.SolvePaymentAllocationInput(
+                    batch_id=batch_id,
                     transaction_id=record.record_id,
                     candidate_invoice_ids=[candidate.invoice_id for candidate in candidates.candidates],
                 ),
@@ -165,6 +238,7 @@ class DeterministicController:
             evidence = self._call(
                 "get_match_evidence",
                 s.GetMatchEvidenceInput(
+                    batch_id=batch_id,
                     transaction_id=record.record_id,
                     candidate_ids=[candidate.invoice_id for candidate in candidates.candidates],
                 ),
@@ -282,16 +356,23 @@ class DeterministicController:
             "calculate_verified_cash",
             s.CalculateVerifiedCashInput(batch_id=batch_id, as_of_date=as_of_date),
         )
-        forecast = self._call(
-            "run_monte_carlo_forecast",
-            s.RunMonteCarloForecastInput(
+        if active_strategy.forecast_method == "monte_carlo":
+            forecast_tool_name = "run_monte_carlo_forecast"
+            forecast_input: BaseModel = s.RunMonteCarloForecastInput(
                 batch_id=batch_id,
                 horizon_days=horizon_days,
                 scenario=s.ScenarioParameters(),
-                simulations=500,
+                simulations=active_strategy.monte_carlo_simulations,
                 random_seed=20260901,
-            ),
-        )
+            )
+        else:
+            forecast_tool_name = "run_cash_forecast"
+            forecast_input = s.RunCashForecastInput(
+                batch_id=batch_id,
+                horizon_days=horizon_days,
+                scenario=s.ScenarioParameters(),
+            )
+        forecast = self._call(forecast_tool_name, forecast_input)
         assert isinstance(forecast, s.RunCashForecastResult)
         forecast_message = (
             f"Detected a projected shortfall on {forecast.shortfall_date.isoformat()}"
@@ -303,7 +384,7 @@ class DeterministicController:
             agent_name=s.AgentName.FORECAST,
             event_type="forecast_completed",
             message=forecast_message,
-            tool_name="run_monte_carlo_forecast",
+            tool_name=forecast_tool_name,
             tool_result_reference=f"forecast:{forecast.forecast_id}",
         )
 
@@ -335,4 +416,5 @@ class DeterministicController:
             exceptions_created=exceptions_created,
             forecast_id=forecast.forecast_id,
             report_id=audit.report_id,
+            model_provenance=model_provenance,
         )

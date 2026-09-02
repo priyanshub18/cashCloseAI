@@ -285,7 +285,7 @@ class FinalizeBatchResult(StrictSchema):
     nonterminal_record_ids: list[Identifier] = Field(default_factory=list)
 
 
-class NormalizeRecordInput(StrictSchema):
+class NormalizeRecordInput(BatchIdInput):
     record_id: Identifier
 
 
@@ -306,7 +306,7 @@ class ResolveCustomerAliasResult(StrictSchema):
     confidence: Confidence
 
 
-class ValidateCurrencyAmountInput(StrictSchema):
+class ValidateCurrencyAmountInput(BatchIdInput):
     record_id: Identifier
 
 
@@ -318,7 +318,7 @@ class ValidateCurrencyAmountResult(StrictSchema):
     errors: list[str] = Field(default_factory=list)
 
 
-class FindCandidateInvoicesInput(StrictSchema):
+class FindCandidateInvoicesInput(BatchIdInput):
     transaction_id: Identifier
     limit: int = Field(default=20, ge=1, le=100)
 
@@ -338,7 +338,7 @@ class FindCandidateInvoicesResult(StrictSchema):
     candidates: list[CandidateInvoice]
 
 
-class FindCandidateLedgerEntriesInput(StrictSchema):
+class FindCandidateLedgerEntriesInput(BatchIdInput):
     transaction_id: Identifier
     limit: int = Field(default=20, ge=1, le=100)
 
@@ -355,7 +355,7 @@ class FindCandidateLedgerEntriesResult(StrictSchema):
     candidates: list[LedgerCandidate]
 
 
-class ParseRemittanceTextInput(StrictSchema):
+class ParseRemittanceTextInput(BatchIdInput):
     remittance_id: Identifier
 
 
@@ -367,7 +367,7 @@ class ParseRemittanceTextResult(StrictSchema):
     deduction_hint: Literal["bank_or_processing_charges", "withholding", "none", "unknown"]
 
 
-class SolvePaymentAllocationInput(StrictSchema):
+class SolvePaymentAllocationInput(BatchIdInput):
     transaction_id: Identifier
     candidate_invoice_ids: list[Identifier] = Field(min_length=1, max_length=100)
 
@@ -381,7 +381,7 @@ class SolvePaymentAllocationResult(StrictSchema):
     alternatives: int = Field(default=0, ge=0)
 
 
-class GetMatchEvidenceInput(StrictSchema):
+class GetMatchEvidenceInput(BatchIdInput):
     transaction_id: Identifier
     candidate_ids: list[Identifier] = Field(min_length=1, max_length=100)
 
@@ -459,7 +459,7 @@ class CreateExceptionResult(StrictSchema):
     exception: ExceptionRecord
 
 
-class ListRelatedExceptionsInput(StrictSchema):
+class ListRelatedExceptionsInput(BatchIdInput):
     record_id: Identifier
 
 
@@ -704,8 +704,85 @@ class PlannedToolCall(StrictSchema):
 
 class ModelPlan(StrictSchema):
     response_id: Identifier
+    model: Annotated[str, Field(min_length=1, max_length=128)]
     calls: list[PlannedToolCall] = Field(default_factory=list, max_length=20)
     final_message: str | None = Field(default=None, max_length=2000)
+
+
+class ControllerStrategy(StrictSchema):
+    """Bounded, non-financial choices delegated to the model planner."""
+
+    batch_id: Identifier
+    record_order: Literal["source_order", "highest_value_first"]
+    candidate_search: Literal["focused", "balanced", "broad"]
+    forecast_method: Literal["deterministic", "monte_carlo"]
+    monte_carlo_simulations: int = Field(ge=100, le=1_000)
+
+    @property
+    def candidate_limit(self) -> int:
+        return {"focused": 10, "balanced": 20, "broad": 50}[self.candidate_search]
+
+
+class ModelToolChoice(StrictSchema):
+    response_id: Identifier
+    call_id: Identifier
+    tool_name: Annotated[str, Field(min_length=2, max_length=100)]
+    arguments: dict[str, Any]
+    outcome: Literal["executed", "strategy_selected"]
+
+
+class ModelOrchestrationProvenance(StrictSchema):
+    provider: Literal["openai"] = "openai"
+    requested_model: Annotated[str, Field(min_length=1, max_length=128)]
+    model: Annotated[str, Field(min_length=1, max_length=128)]
+    response_ids: list[Identifier] = Field(min_length=2, max_length=2)
+    tool_choices: list[ModelToolChoice] = Field(min_length=2, max_length=4)
+    strategy: ControllerStrategy
+
+    @model_validator(mode="after")
+    def validate_trace_consistency(self) -> "ModelOrchestrationProvenance":
+        observation_response_id, strategy_response_id = self.response_ids
+        if observation_response_id == strategy_response_id:
+            raise ValueError("model planning response IDs must be distinct")
+        if len({choice.call_id for choice in self.tool_choices}) != len(self.tool_choices):
+            raise ValueError("model planning call IDs must be distinct")
+
+        strategy_choices = [
+            choice for choice in self.tool_choices if choice.outcome == "strategy_selected"
+        ]
+        if len(strategy_choices) != 1:
+            raise ValueError("model provenance must contain exactly one strategy choice")
+        strategy_choice = strategy_choices[0]
+        if (
+            strategy_choice.response_id != strategy_response_id
+            or strategy_choice.tool_name != "select_controller_strategy"
+            or strategy_choice.arguments != self.strategy.model_dump(mode="json")
+        ):
+            raise ValueError("model strategy choice does not match recorded strategy")
+
+        observation_choices = [
+            choice for choice in self.tool_choices if choice.outcome == "executed"
+        ]
+        if not 1 <= len(observation_choices) <= 3:
+            raise ValueError("model provenance must contain one to three observations")
+        allowed_observations = {
+            "inspect_batch",
+            "validate_batch",
+            "get_batch_summary",
+        }
+        if any(
+            choice.response_id != observation_response_id
+            or choice.tool_name not in allowed_observations
+            or choice.arguments.get("batch_id") != self.strategy.batch_id
+            for choice in observation_choices
+        ):
+            raise ValueError("model observation provenance is inconsistent")
+        return self
+
+
+class ModelGuidedRunPlan(StrictSchema):
+    strategy: ControllerStrategy
+    provenance: ModelOrchestrationProvenance
 
 
 class ControllerRunResult(StrictSchema):
@@ -716,3 +793,4 @@ class ControllerRunResult(StrictSchema):
     exceptions_created: int = Field(ge=0)
     forecast_id: Identifier | None = None
     report_id: Identifier | None = None
+    model_provenance: ModelOrchestrationProvenance | None = None

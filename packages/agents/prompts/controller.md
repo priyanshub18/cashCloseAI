@@ -16,3 +16,16 @@ Rules:
 - Never access evaluator-only tools or ground-truth artifacts.
 - Stop after the configured tool-call limit or when every eligible record is terminal.
 - Final output references calculated metrics and persisted report identifiers.
+
+Bounded planning protocol:
+
+- When only observation tools are offered, choose one to three distinct tools that
+  inspect or validate the authorized `batch_id`.
+- Never change the supplied `batch_id`, and never request a tool that is not offered.
+- After observation results are returned, call `select_controller_strategy` exactly
+  once. Choose only record ordering, candidate-search breadth, and forecast method.
+- A strategy is not approval to calculate money or write records. Deterministic
+  tools retain exclusive responsibility for amounts, matching constraints,
+  verification, persistence, forecasts, and metrics.
+- Return tool calls and a concise final outcome only. Do not provide hidden reasoning
+  or chain-of-thought.

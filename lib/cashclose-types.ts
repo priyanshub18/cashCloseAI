@@ -90,9 +90,22 @@ export type AgentName =
   | "evaluation";
 export type AgentEventStatus = "started" | "succeeded" | "warning" | "failed";
 
+export type OrchestrationMode =
+  | "responses-guided-with-deterministic-execution"
+  | "deterministic-demo";
+
 export interface HealthResponse {
   status: string;
   service: string;
+}
+
+/** Runtime facts reported by the API. The UI must not infer model availability. */
+export interface RuntimeCapabilitiesView {
+  responses_mode_configured: boolean;
+  responses_model: string;
+  deterministic_fallback: "deterministic-controller";
+  default_orchestration_mode: OrchestrationMode;
+  transaction_trace_enabled: boolean;
 }
 
 export interface ValidationIssue {
@@ -483,6 +496,18 @@ export interface AgentEvent {
 export interface AgentEventPage {
   items: AgentEvent[];
   next_sequence: number;
+  terminal: boolean;
+}
+
+export interface AgentTraceView {
+  batch_id: Identifier;
+  record_id?: Identifier | null;
+  agent_name?: AgentName | null;
+  tool_name?: string | null;
+  status?: AgentEventStatus | null;
+  items: AgentEvent[];
+  next_sequence: number;
+  total_matching: number;
   terminal: boolean;
 }
 

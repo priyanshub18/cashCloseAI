@@ -70,6 +70,56 @@ test("client uses configured origin and preserves request/response money strings
   assert.equal(new Headers(calls[0]?.init?.headers).get("content-type"), "application/json");
 });
 
+test("runtime capabilities and trace filters use their explicit contracts", async () => {
+  const calls: string[] = [];
+  const responses = [
+    {
+      responses_mode_configured: true,
+      responses_model: "configured-model",
+      deterministic_fallback: "deterministic-controller",
+      default_orchestration_mode: "responses-guided-with-deterministic-execution",
+      transaction_trace_enabled: true,
+    },
+    {
+      batch_id: "BATCH-1",
+      record_id: "BANK-42",
+      agent_name: null,
+      tool_name: null,
+      status: null,
+      items: [],
+      next_sequence: 12,
+      total_matching: 0,
+      terminal: true,
+    },
+  ];
+  const client = createCashCloseClient({
+    baseUrl: "https://api.example.test",
+    fetch: async (input) => {
+      calls.push(String(input));
+      return jsonResponse(responses.shift());
+    },
+  });
+
+  const capabilities = await client.getCapabilities();
+  const trace = await client.getBatchTrace("BATCH-1", {
+    afterSequence: 7,
+    limit: 100,
+    recordId: "BANK-42",
+    agentName: "reconciliation",
+    toolName: "find_candidate_invoices",
+    status: "succeeded",
+  });
+
+  assert.equal(capabilities.responses_mode_configured, true);
+  assert.equal(trace.record_id, "BANK-42");
+  assert.equal(calls[0], "https://api.example.test/api/capabilities");
+  assert.equal(
+    calls[1],
+    "https://api.example.test/api/batches/BATCH-1/trace?after_sequence=7&limit=100&record_id=BANK-42&agent_name=reconciliation&tool_name=find_candidate_invoices&status=succeeded",
+  );
+  assert.throws(() => client.getBatchTrace("BATCH-1", { limit: 2001 }), /between 1 and 2000/);
+});
+
 test("domain errors and FastAPI validation errors are structured", async () => {
   const responses = [
     jsonResponse({ error: { code: "CONFLICT", message: "batch already ran" } }, 409),

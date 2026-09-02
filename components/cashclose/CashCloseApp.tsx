@@ -80,6 +80,8 @@ import type {
   MatchList,
   MatchProposal,
   ReconciliationDecision,
+  RecordDetailView,
+  RuntimeCapabilitiesView,
   RunCashForecastResult,
   ScenarioRequest,
 } from "../../lib/cashclose-types";
@@ -104,9 +106,18 @@ import {
   DEMO_METRICS,
 } from "../../lib/demo-workspace";
 
-type View = "overview" | "reconciliation" | "exceptions" | "forecast" | "audit";
+type View = "overview" | "trace" | "reconciliation" | "exceptions" | "forecast" | "audit";
 type Connection = "checking" | "online" | "offline";
 type Source = "preview" | "live";
+type ExecutionMode = "agentic" | "deterministic";
+type TraceStageId =
+  | "observe"
+  | "normalize"
+  | "candidates"
+  | "allocation"
+  | "evidence"
+  | "verify"
+  | "outcome";
 
 interface WorkspaceData {
   batch: BatchView;
@@ -117,6 +128,7 @@ interface WorkspaceData {
   evaluation: EvaluationView;
   audit: AuditReportResult;
   events: AgentEvent[];
+  records: RecordDetailView[];
 }
 
 interface ToastState {
@@ -140,10 +152,12 @@ const INITIAL_WORKSPACE: WorkspaceData = {
   evaluation: DEMO_EVALUATION,
   audit: DEMO_AUDIT,
   events: DEMO_EVENTS,
+  records: buildPreviewRecords(),
 };
 
 const NAVIGATION: Array<{ id: View; label: string; icon: LucideIcon }> = [
   { id: "overview", label: "Controller", icon: LayoutDashboard },
+  { id: "trace", label: "Agent trace", icon: Bot },
   { id: "reconciliation", label: "Reconciliation", icon: ArrowLeftRight },
   { id: "exceptions", label: "Exceptions", icon: AlertTriangle },
   { id: "forecast", label: "Cash forecast", icon: Activity },
@@ -155,6 +169,11 @@ const PAGE_META: Record<View, { eyebrow: string; title: string; subtitle: string
     eyebrow: "CONTROLLER WORKSPACE",
     title: "Cash position, verified.",
     subtitle: "One close cockpit for evidence, exceptions, and the next 30 days of cash.",
+  },
+  trace: {
+    eyebrow: "TRANSACTION TRACE",
+    title: "Follow every control gate.",
+    subtitle: "Inspect operational tool actions, evidence, and outcomes for one transaction at a time.",
   },
   reconciliation: {
     eyebrow: "RECONCILIATION WORKSPACE",
@@ -197,14 +216,20 @@ const FILE_REQUIREMENTS: Record<FileKind, { label: string; columns: string[] }> 
   },
 };
 
-const POLICY_STAGES = [
-  "VALIDATING",
-  "NORMALIZING",
-  "RECONCILING",
-  "VERIFYING",
-  "FORECASTING",
-  "EVALUATING",
-] as const;
+const TRACE_STAGES: Array<{
+  id: TraceStageId;
+  label: string;
+  agent: AgentEvent["agent_name"];
+  defaultTool: string;
+}> = [
+  { id: "observe", label: "Observe", agent: "controller", defaultTool: "inspect_batch" },
+  { id: "normalize", label: "Normalize", agent: "reconciliation", defaultTool: "normalize_reference" },
+  { id: "candidates", label: "Candidates", agent: "reconciliation", defaultTool: "find_candidate_invoices" },
+  { id: "allocation", label: "Allocation", agent: "reconciliation", defaultTool: "solve_payment_allocation" },
+  { id: "evidence", label: "Evidence", agent: "reconciliation", defaultTool: "get_match_evidence" },
+  { id: "verify", label: "Verify", agent: "verification", defaultTool: "verify_match" },
+  { id: "outcome", label: "Commit or exception", agent: "controller", defaultTool: "commit_match / create_exception" },
+];
 
 function confidencePercent(value: string | undefined): string {
   if (!value) return "—";
@@ -243,6 +268,7 @@ function formatDate(value: string, options: Intl.DateTimeFormatOptions = {}): st
 }
 
 function formatDuration(milliseconds: number): string {
+  if (milliseconds === 0) return "<1ms";
   if (milliseconds < 1000) return `${milliseconds}ms`;
   return `${(milliseconds / 1000).toFixed(1)}s`;
 }
@@ -280,6 +306,132 @@ function errorMessage(error: unknown): string {
 
 function proposalDecision(matches: MatchList, proposal: MatchProposal): ReconciliationDecision | undefined {
   return matches.items.find((item) => item.proposal_id === proposal.proposal_id);
+}
+
+function buildPreviewRecords(): RecordDetailView[] {
+  const proposalRecords = DEMO_MATCHES.proposals.map((proposal): RecordDetailView => {
+    const decision = proposalDecision(DEMO_MATCHES, proposal);
+    const meta = DEMO_MATCH_META[proposal.transaction_id];
+    return {
+      record: {
+        record_id: proposal.transaction_id,
+        record_type: "bank_transaction",
+        status: decision?.decision ?? "PROPOSED",
+        amount: proposal.transaction_amount,
+        currency: proposal.currency,
+        counterparty: meta?.counterparty ?? "Counterparty pending",
+        reference: meta?.reference ?? proposal.transaction_id,
+        effective_date: meta?.valueDate ?? DEMO_BATCH.as_of_date,
+      },
+      candidates: proposal.allocations.map((allocation) => ({
+        invoice_id: allocation.invoice_id,
+        invoice_number: allocation.invoice_id,
+        remaining_balance: allocation.amount,
+        currency: allocation.currency,
+        reference_similarity: proposal.confidence,
+        counterparty_similarity: proposal.confidence,
+        hard_risk_flags: proposal.risk_flags,
+      })),
+      evidence: {
+        transaction_id: proposal.transaction_id,
+        evidence: proposal.evidence,
+        confidence: proposal.confidence,
+        risk_flags: proposal.risk_flags,
+      },
+      proposal,
+      verification: {
+        proposal_id: proposal.proposal_id,
+        approved: decision?.decision === "AUTO_RECONCILED" || decision?.decision === "MANUALLY_RECONCILED",
+        policy_version: decision?.policy_version ?? "CC-R2.4",
+        confidence_threshold: "0.9500" as MatchProposal["confidence"],
+        checked_at: decision?.committed_at ?? proposal.created_at,
+        reasons: proposal.risk_flags?.map(titleCase) ?? [],
+        hard_risk_flags: proposal.risk_flags,
+      },
+      decision,
+    };
+  });
+  const proposalIds = new Set(proposalRecords.map((item) => item.record.record_id));
+  const exceptionRecords = DEMO_EXCEPTIONS
+    .filter((item) => !proposalIds.has(item.record_id))
+    .map((item): RecordDetailView => {
+      const meta = DEMO_EXCEPTION_META[item.exception_id];
+      return {
+        record: {
+          record_id: item.record_id,
+          record_type: item.record_id.startsWith("BANK-") ? "bank_transaction" : "ledger_entry",
+          status: item.status === "IN_REVIEW" ? "NEEDS_REVIEW" : item.status === "RESOLVED" ? "REJECTED" : "UNRESOLVED",
+          amount: (item.amount ?? money(meta?.amount ?? "0")) as RecordDetailView["record"]["amount"],
+          currency: item.currency ?? meta?.currency ?? "USD",
+          counterparty: item.counterparty ?? meta?.counterparty ?? "Counterparty pending",
+          reference: item.reference ?? item.record_id,
+          effective_date: DEMO_BATCH.as_of_date,
+        },
+        candidates: item.candidate_invoices,
+        evidence: {
+          transaction_id: item.record_id,
+          evidence: item.evidence,
+          confidence: "0.0000" as MatchProposal["confidence"],
+          risk_flags: [item.reason_code],
+        },
+        exception: item,
+      };
+    });
+  return [...proposalRecords, ...exceptionRecords];
+}
+
+function traceStageForEvent(event: AgentEvent): TraceStageId | null {
+  const key = `${event.tool_name ?? ""} ${event.event_type}`.toLowerCase();
+  if (/commit_match|create_exception|request_human_review|resolve_exception|decision|exception/.test(key)) return "outcome";
+  if (/verify_match|verif/.test(key)) return "verify";
+  if (/get_match_evidence|propose_match|parse_remittance|evidence|proposal/.test(key)) return "evidence";
+  if (/solve_payment_allocation|allocation/.test(key)) return "allocation";
+  if (/find_candidate|candidate/.test(key)) return "candidates";
+  if (/normalize_|resolve_customer_alias|currency_and_amount|normaliz/.test(key)) return "normalize";
+  if (/inspect_batch|validate_batch|batch_inspected|validation/.test(key)) return "observe";
+  return null;
+}
+
+function eventsForRecord(events: AgentEvent[], detail: RecordDetailView): AgentEvent[] {
+  const references = new Set([
+    `record:${detail.record.record_id}`,
+    detail.proposal ? `proposal:${detail.proposal.proposal_id}` : "",
+    detail.decision ? `decision:${detail.decision.decision_id}` : "",
+    detail.exception ? `exception:${detail.exception.exception_id}` : "",
+  ].filter(Boolean));
+  return events.filter((event) => {
+    if (event.input_reference && references.has(event.input_reference)) return true;
+    if (event.tool_result_reference && references.has(event.tool_result_reference)) return true;
+    if (event.input_reference === `record:${detail.record.record_id}`) return true;
+    return event.message.includes(detail.record.record_id);
+  });
+}
+
+function previewEventsForRecord(detail: RecordDetailView): AgentEvent[] {
+  const recordReference = `record:${detail.record.record_id}`;
+  const createdAt = detail.proposal?.created_at ?? detail.exception?.created_at ?? DEMO_BATCH.created_at;
+  const outcomes: Array<{ stage: TraceStageId; tool: string; agent: AgentEvent["agent_name"]; message: string; status?: AgentEvent["status"]; result: string }> = [
+    { stage: "observe", tool: "inspect_batch", agent: "controller", message: `Observed ${detail.record.record_id} in the validated batch`, result: recordReference },
+    { stage: "normalize", tool: "normalize_reference", agent: "reconciliation", message: "Normalized counterparty and payment reference", result: `normalized:${detail.record.record_id}` },
+    { stage: "candidates", tool: "find_candidate_invoices", agent: "reconciliation", message: `Constrained the search to ${detail.candidates?.length ?? 0} eligible invoice candidate${detail.candidates?.length === 1 ? "" : "s"}`, status: detail.candidates?.length ? "succeeded" : "warning", result: `candidate-set:${detail.record.record_id}` },
+    { stage: "allocation", tool: "solve_payment_allocation", agent: "reconciliation", message: detail.proposal ? `Solved ${detail.proposal.allocations.length} allocation${detail.proposal.allocations.length === 1 ? "" : "s"} with deterministic constraints` : "No safe allocation satisfied policy constraints", status: detail.proposal ? "succeeded" : "warning", result: `allocation:${detail.record.record_id}` },
+    { stage: "evidence", tool: "get_match_evidence", agent: "reconciliation", message: `Assembled ${detail.evidence?.evidence.length ?? 0} evidence item${detail.evidence?.evidence.length === 1 ? "" : "s"}`, status: detail.evidence?.evidence.length ? "succeeded" : "warning", result: detail.proposal ? `proposal:${detail.proposal.proposal_id}` : `evidence:${detail.record.record_id}` },
+    { stage: "verify", tool: "verify_match", agent: "verification", message: detail.verification?.approved ? `Passed policy ${detail.verification.policy_version}` : "Verification did not authorize an automatic commit", status: detail.verification?.approved ? "succeeded" : "warning", result: detail.proposal ? `verification:${detail.proposal.proposal_id}` : `verification:${detail.record.record_id}` },
+    { stage: "outcome", tool: detail.exception ? "create_exception" : "commit_match", agent: "controller", message: detail.exception ? `Created ${titleCase(detail.exception.reason_code)} exception with a next action` : `Recorded ${titleCase(detail.decision?.decision ?? detail.record.status)}`, status: detail.exception ? "warning" : "succeeded", result: detail.exception ? `exception:${detail.exception.exception_id}` : `decision:${detail.decision?.decision_id ?? detail.record.record_id}` },
+  ];
+  return outcomes.map((item, index) => ({
+    sequence: 10_000 + index,
+    batch_id: DEMO_BATCH.batch_id,
+    agent_name: item.agent,
+    event_type: "tool_completed",
+    message: item.message,
+    input_reference: recordReference,
+    tool_name: item.tool,
+    tool_result_reference: item.result,
+    timestamp: createdAt,
+    latency_ms: 0,
+    status: item.status ?? "succeeded",
+  }));
 }
 
 function applyPreviewScenario(
@@ -339,10 +491,13 @@ export function CashCloseApp() {
   const [workspace, setWorkspace] = useState<WorkspaceData>(INITIAL_WORKSPACE);
   const [source, setSource] = useState<Source>("preview");
   const [connection, setConnection] = useState<Connection>("checking");
+  const [capabilities, setCapabilities] = useState<RuntimeCapabilitiesView | null>(null);
+  const [orchestrationMode, setOrchestrationMode] = useState<string>("deterministic-demo");
   const [mobileNav, setMobileNav] = useState(false);
   const [newBatchOpen, setNewBatchOpen] = useState(false);
   const [runOpen, setRunOpen] = useState(false);
   const [runState, setRunState] = useState<"idle" | "running" | "complete" | "failed">("idle");
+  const [runError, setRunError] = useState<string | null>(null);
   const [runEvents, setRunEvents] = useState<AgentEvent[]>([]);
   const [selectedProposalId, setSelectedProposalId] = useState<string | null>(null);
   const [selectedExceptionId, setSelectedExceptionId] = useState<string | null>(null);
@@ -367,7 +522,7 @@ export function CashCloseApp() {
     async (batchId: string, quiet = false) => {
       if (!quiet) setBusy("refresh");
       try {
-        const [batch, metrics, matches, exceptions, forecast, evaluation, audit, eventPage] =
+        const [batch, metrics, matches, exceptions, forecast, evaluation, audit, records, trace] =
           await Promise.all([
             client.getBatch(batchId),
             client.getBatchMetrics(batchId),
@@ -376,7 +531,8 @@ export function CashCloseApp() {
             client.getForecast(batchId),
             client.getEvaluation(batchId),
             client.getAudit(batchId),
-            client.getBatchEventSnapshot(batchId),
+            client.getRecords(batchId),
+            client.getBatchTrace(batchId, { limit: 2000 }),
           ]);
         setWorkspace({
           batch,
@@ -386,12 +542,15 @@ export function CashCloseApp() {
           forecast,
           evaluation,
           audit,
-          events: eventPage.items,
+          events: trace.items,
+          records: records.items,
         });
-        setRunEvents(eventPage.items);
+        setRunEvents(trace.items);
         setSource("live");
         setConnection("online");
         window.localStorage.setItem("cashclose.activeBatchId", batch.batch_id);
+        const savedMode = window.localStorage.getItem(`cashclose.orchestrationMode:${batch.batch_id}`);
+        if (savedMode) setOrchestrationMode(savedMode);
         if (!quiet) notify(`Loaded live batch ${batch.batch_id}`);
       } catch (error) {
         if (!quiet) notify(errorMessage(error), "error");
@@ -410,6 +569,8 @@ export function CashCloseApp() {
       try {
         await client.health({ timeoutMs: 3500 });
         setConnection("online");
+        const runtime = await client.getCapabilities({ timeoutMs: 3500 }).catch(() => null);
+        setCapabilities(runtime);
         const batchId = window.localStorage.getItem("cashclose.activeBatchId");
         if (batchId) await loadBatch(batchId, true).catch(() => undefined);
       } catch {
@@ -431,6 +592,12 @@ export function CashCloseApp() {
               ? current
               : [...current, event].sort((a, b) => a.sequence - b.sequence),
           );
+          setWorkspace((current) => ({
+            ...current,
+            events: current.events.some((existing) => existing.sequence === event.sequence)
+              ? current.events
+              : [...current.events, event].sort((a, b) => a.sequence - b.sequence),
+          }));
         }
       } catch (error) {
         if (!(error instanceof CashCloseApiError && error.code === "REQUEST_ABORTED")) {
@@ -441,25 +608,35 @@ export function CashCloseApp() {
     [client, notify],
   );
 
-  const runDemo = useCallback(async () => {
+  const runDemo = useCallback(async (requestedMode: ExecutionMode = "deterministic") => {
     setNewBatchOpen(false);
     setRunOpen(true);
     setRunState("running");
+    setRunError(null);
     setRunEvents([]);
     setBusy("run");
     const eventController = new AbortController();
+    const useModelPlanner = requestedMode === "agentic" && capabilities?.responses_mode_configured === true;
+    setOrchestrationMode(useModelPlanner ? "responses-requested" : "deterministic-demo");
     try {
       const created = await client.createDemoBatch({
         organization_id: "ORG-HACKATHON",
         accounting_timezone: "Asia/Kolkata",
         as_of_date: "2026-09-01",
       });
+      const initialRecords = await client.getRecords(created.batch_id);
       setConnection("online");
       setSource("live");
-      setWorkspace((current) => ({ ...current, batch: created }));
+      setWorkspace((current) => ({ ...current, batch: created, events: [], records: initialRecords.items }));
       window.localStorage.setItem("cashclose.activeBatchId", created.batch_id);
       const eventPromise = pumpEvents(created.batch_id, eventController);
-      await client.runDemoBatch(created.batch_id, { horizon_days: 30 });
+      const run = await client.runBatch(
+        created.batch_id,
+        { horizon_days: 30, use_model_planner: useModelPlanner },
+        { timeoutMs: 0 },
+      );
+      setOrchestrationMode(run.orchestration_mode);
+      window.localStorage.setItem(`cashclose.orchestrationMode:${created.batch_id}`, run.orchestration_mode);
       await eventPromise;
       await loadBatch(created.batch_id, true);
       setRunState("complete");
@@ -467,19 +644,24 @@ export function CashCloseApp() {
     } catch (error) {
       eventController.abort();
       setRunState("failed");
-      notify(errorMessage(error), "error");
+      const message = errorMessage(error);
+      setRunError(message);
+      notify(message, "error");
     } finally {
       setBusy(null);
     }
-  }, [client, loadBatch, notify, pumpEvents]);
+  }, [capabilities, client, loadBatch, notify, pumpEvents]);
 
   const runUploadedBatch = useCallback(
-    async (files: Record<FileKind, UploadState>) => {
+    async (files: Record<FileKind, UploadState>, requestedMode: ExecutionMode) => {
       setRunOpen(true);
       setRunState("running");
+      setRunError(null);
       setRunEvents([]);
       setBusy("run");
       const eventController = new AbortController();
+      const useModelPlanner = requestedMode === "agentic" && capabilities?.responses_mode_configured === true;
+      setOrchestrationMode(useModelPlanner ? "responses-requested" : "deterministic-demo");
       try {
         const created = await client.createBatch({
           organization_id: "ORG-HACKATHON",
@@ -487,7 +669,7 @@ export function CashCloseApp() {
           as_of_date: new Date().toISOString().slice(0, 10),
           demo_mode: false,
         });
-        setWorkspace((current) => ({ ...current, batch: created }));
+        setWorkspace((current) => ({ ...current, batch: created, events: [], records: [] }));
         setSource("live");
         setConnection("online");
         window.localStorage.setItem("cashclose.activeBatchId", created.batch_id);
@@ -498,8 +680,16 @@ export function CashCloseApp() {
         if (!validation.can_run) {
           throw new Error(validation.validation.issues?.map((issue) => issue.code).join(", ") || "Batch validation failed");
         }
+        const initialRecords = await client.getRecords(created.batch_id);
+        setWorkspace((current) => ({ ...current, records: initialRecords.items }));
         const eventPromise = pumpEvents(created.batch_id, eventController);
-        await client.runBatch(created.batch_id, { horizon_days: 30, use_model_planner: false });
+        const run = await client.runBatch(
+          created.batch_id,
+          { horizon_days: 30, use_model_planner: useModelPlanner },
+          { timeoutMs: 0 },
+        );
+        setOrchestrationMode(run.orchestration_mode);
+        window.localStorage.setItem(`cashclose.orchestrationMode:${created.batch_id}`, run.orchestration_mode);
         await eventPromise;
         await loadBatch(created.batch_id, true);
         setNewBatchOpen(false);
@@ -508,12 +698,14 @@ export function CashCloseApp() {
       } catch (error) {
         eventController.abort();
         setRunState("failed");
-        notify(errorMessage(error), "error");
+        const message = errorMessage(error);
+        setRunError(message);
+        notify(message, "error");
       } finally {
         setBusy(null);
       }
     },
-    [client, loadBatch, notify, pumpEvents],
+    [capabilities, client, loadBatch, notify, pumpEvents],
   );
 
   const updatePreviewMatch = useCallback((proposalId: string, decision: "MANUALLY_RECONCILED" | "REJECTED") => {
@@ -824,7 +1016,7 @@ export function CashCloseApp() {
             {source === "live" ? <Database size={16}/> : <Sparkles size={16}/>} 
             <span><strong>{source === "live" ? "Live Docker workspace" : "Interactive truth-set preview"}</strong> — {source === "live" ? "all values are loaded from the FastAPI controller" : "explore every workflow, then run the controller to create audited backend records"}.</span>
           </div>
-          {source === "preview" ? <button onClick={() => void runDemo()}>Run live demo <ArrowRight size={15}/></button> : <button onClick={() => setRunOpen(true)}>Open run trace <ArrowRight size={15}/></button>}
+          {source === "preview" ? <button onClick={() => setNewBatchOpen(true)}>Configure live run <ArrowRight size={15}/></button> : <button onClick={() => switchView("trace")}>Open agent trace <ArrowRight size={15}/></button>}
         </div>
 
         {view === "overview" ? (
@@ -834,6 +1026,17 @@ export function CashCloseApp() {
             onRun={() => setNewBatchOpen(true)}
             onArchitecture={() => setArchitectureOpen(true)}
             onOpenProposal={(id) => setSelectedProposalId(id)}
+          />
+        ) : null}
+        {view === "trace" ? (
+          <TraceView
+            workspace={workspace}
+            events={runState === "running" ? runEvents : workspace.events}
+            source={source}
+            runState={runState}
+            orchestrationMode={orchestrationMode}
+            onOpenProposal={setSelectedProposalId}
+            onOpenException={setSelectedExceptionId}
           />
         ) : null}
         {view === "reconciliation" ? (
@@ -874,19 +1077,24 @@ export function CashCloseApp() {
       {newBatchOpen ? (
         <NewBatchDialog
           connection={connection}
+          capabilities={capabilities}
           busy={busy === "run"}
           onClose={() => setNewBatchOpen(false)}
-          onDemo={() => void runDemo()}
-          onUpload={(files) => void runUploadedBatch(files)}
+          onDemo={(mode) => void runDemo(mode)}
+          onUpload={(files, mode) => void runUploadedBatch(files, mode)}
           notify={notify}
         />
       ) : null}
       {runOpen ? (
         <RunPanel
           state={runState}
+          error={runError}
           events={runEvents.length ? runEvents : workspace.events}
           batch={workspace.batch}
+          orchestrationMode={orchestrationMode}
+          processingTimeMs={workspace.metrics.processing_time_ms}
           onClose={() => setRunOpen(false)}
+          onTrace={() => { setRunOpen(false); switchView("trace"); }}
           onResults={() => { setRunOpen(false); switchView("overview"); }}
         />
       ) : null}
@@ -926,7 +1134,7 @@ export function CashCloseApp() {
           apiUrl={resolveCashCloseApiBaseUrl()}
           batchId={workspace.batch.batch_id}
           onClose={() => setConnectionOpen(false)}
-          onRun={() => { setConnectionOpen(false); void runDemo(); }}
+          onRun={() => { setConnectionOpen(false); setNewBatchOpen(true); }}
           onPreview={() => {
             setWorkspace(INITIAL_WORKSPACE);
             setSource("preview");
@@ -1076,6 +1284,187 @@ function CashChart({ forecast, compact = false }: { forecast: RunCashForecastRes
 function ForecastTooltip({ active, payload, label, currency }: { active?: boolean; payload?: Array<{ name?: string; value?: number; color?: string }>; label?: string; currency: string }) {
   if (!active || !payload?.length) return null;
   return <div className="chart-tooltip"><strong>{label}</strong>{payload.filter((item) => item.name && !item.name.startsWith("p")).map((item) => <span key={item.name}><i style={{ background: item.color }}/>{item.name}<b>{currency === "USD" ? "$" : "₹"}{Number(item.value).toFixed(1)}k</b></span>)}</div>;
+}
+
+function TraceView({
+  workspace,
+  events,
+  source,
+  runState,
+  orchestrationMode,
+  onOpenProposal,
+  onOpenException,
+}: {
+  workspace: WorkspaceData;
+  events: AgentEvent[];
+  source: Source;
+  runState: "idle" | "running" | "complete" | "failed";
+  orchestrationMode: string;
+  onOpenProposal: (id: string) => void;
+  onOpenException: (id: string) => void;
+}) {
+  const records = workspace.records.filter((item) => item.record.record_type === "bank_transaction");
+  const [search, setSearch] = useState("");
+  const [selectedRecordId, setSelectedRecordId] = useState<string | null>(records[0]?.record.record_id ?? null);
+  const [selectedStage, setSelectedStage] = useState<TraceStageId>("observe");
+  const filtered = records.filter((item) =>
+    `${item.record.record_id} ${item.record.counterparty} ${item.record.reference} ${item.record.status}`
+      .toLowerCase()
+      .includes(search.toLowerCase()),
+  );
+  const selected = filtered.find((item) => item.record.record_id === selectedRecordId) ?? filtered[0] ?? (search ? null : records[0]) ?? null;
+
+  const recordEvents = selected
+    ? source === "preview"
+      ? previewEventsForRecord(selected)
+      : eventsForRecord(events, selected)
+    : [];
+  const stageStates = TRACE_STAGES.map((stage) => {
+    const stageEvents = recordEvents.filter((event) => traceStageForEvent(event) === stage.id);
+    const latest = stageEvents.at(-1);
+    const inferredComplete = selected ? traceStageHasStructuredResult(stage.id, selected) : false;
+    const status = latest?.status === "failed"
+      ? "failed"
+      : latest?.status === "warning"
+        ? "warning"
+        : latest?.status === "started"
+          ? "active"
+          : latest || inferredComplete
+            ? "complete"
+            : "pending";
+    return {
+      ...stage,
+      events: stageEvents,
+      latest,
+      status,
+      latency: stageEvents.reduce((total, event) => total + event.latency_ms, 0),
+    };
+  });
+  const activeStage = stageStates.find((stage) => stage.id === selectedStage) ?? stageStates[0];
+  const globalFeed = [...events].sort((a, b) => b.sequence - a.sequence).slice(0, 10);
+  const agentic = orchestrationMode.startsWith("responses");
+  const responsesPending = orchestrationMode === "responses-requested";
+
+  return <div className="page-stack trace-page">
+    <section className="trace-context panel">
+      <div className={`execution-badge ${agentic ? "agentic" : "deterministic"}`}>
+        {agentic ? <Sparkles size={17}/> : <Database size={17}/>}
+        <span><strong>{agentic ? `OpenAI Responses${responsesPending ? " requested" : ""}` : "Deterministic controller"}</strong><small>{agentic ? responsesPending ? "Request accepted by the UI; recorded tool events remain the execution proof" : "Planner selected tools; deterministic code executed finance actions" : "Rule-driven orchestration; no model calls claimed"}</small></span>
+      </div>
+      <div className="trace-boundary"><LockKeyhole size={17}/><span><strong>Operational trace only</strong><small>Tool inputs, evidence references, outcomes, and measured latency—never hidden reasoning.</small></span></div>
+      {runState === "running" ? <span className="live-chip" role="status"><Loader2 className="spin" size={14}/> Live</span> : <span className="trace-source-chip">{source === "live" ? "Backend record" : "Preview fixture"}</span>}
+    </section>
+
+    <section className="trace-workspace panel">
+      <aside className="trace-records" aria-label="Transaction selector">
+        <header><div><p className="eyebrow">TRANSACTIONS</p><strong>{records.length} bank records</strong></div><span>{filtered.length}</span></header>
+        <label className="search-field trace-search"><Search size={16}/><span className="sr-only">Search transactions</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="ID, counterparty, reference…"/></label>
+        <div className="trace-record-list">
+          {filtered.map((item) => <button
+            key={item.record.record_id}
+            className={selected?.record.record_id === item.record.record_id ? "active" : ""}
+            onClick={() => { setSelectedRecordId(item.record.record_id); setSelectedStage("observe"); }}
+            aria-current={selected?.record.record_id === item.record.record_id ? "true" : undefined}
+          >
+            <span className={`record-state ${traceRecordTone(item)}`}>{traceRecordTone(item) === "safe" ? <Check size={13}/> : traceRecordTone(item) === "risk" ? <AlertTriangle size={13}/> : <Clock3 size={13}/>}</span>
+            <span><strong>{item.record.counterparty}</strong><code>{item.record.record_id}</code><small>{item.record.reference}</small></span>
+            <span><strong>{compactMoney(item.record.amount, item.record.currency)}</strong><small>{titleCase(item.record.status)}</small></span>
+          </button>)}
+          {!filtered.length ? <EmptyState title="No transactions found" detail="Try another ID, counterparty, or reference."/> : null}
+        </div>
+      </aside>
+
+      {selected && activeStage ? <div className="trace-detail">
+        <header className="trace-record-header">
+          <span className="trace-record-icon"><Banknote size={22}/></span>
+          <div><p className="eyebrow">{selected.record.record_id}</p><h2>{selected.record.counterparty}</h2><code>{selected.record.reference}</code></div>
+          <div className="trace-record-amount"><strong>{formatMoney(selected.record.amount, selected.record.currency)}</strong><span>{formatDate(selected.record.effective_date, { year: "numeric" })}</span></div>
+          <div className="trace-record-result"><DecisionPill status={selected.decision?.decision ?? selected.exception?.status ?? selected.record.status}/>{selected.proposal ? <span>Confidence <strong>{confidencePercent(selected.proposal.confidence)}</strong></span> : <span>Confidence <strong>Abstained</strong></span>}</div>
+        </header>
+
+        <nav className="trace-pipeline" aria-label="Transaction processing stages">
+          {stageStates.map((stage, index) => <button key={stage.id} className={`${stage.status} ${selectedStage === stage.id ? "selected" : ""}`} onClick={() => setSelectedStage(stage.id)} aria-current={selectedStage === stage.id ? "step" : undefined}>
+            <span className="stage-index">{stage.status === "complete" ? <Check size={14}/> : stage.status === "warning" || stage.status === "failed" ? <AlertTriangle size={14}/> : stage.status === "active" ? <Loader2 className="spin" size={14}/> : index + 1}</span>
+            <span><strong>{stage.label}</strong><small>{titleCase(stage.status)}</small></span>
+            {index < stageStates.length - 1 ? <i/> : null}
+          </button>)}
+        </nav>
+
+        {source === "preview" ? <p className="fixture-disclosure"><Sparkles size={15}/><span><strong>Preview evidence reconstruction.</strong> These stages are derived from the stored demo fixture; they are not replayed backend or model calls.</span></p> : null}
+
+        <div className="trace-inspection-grid">
+          <article className="trace-stage-card">
+            <header><div><p className="eyebrow">SELECTED CONTROL GATE</p><h3>{activeStage.label}</h3></div><span className={`stage-status ${activeStage.status}`}>{activeStage.status === "complete" ? <CheckCircle2 size={14}/> : activeStage.status === "warning" || activeStage.status === "failed" ? <AlertTriangle size={14}/> : <Clock3 size={14}/>} {titleCase(activeStage.status)}</span></header>
+            <dl className="trace-metadata">
+              <div><dt>Agent owner</dt><dd>{titleCase(activeStage.latest?.agent_name ?? activeStage.agent)}</dd></div>
+              <div><dt>Tool</dt><dd><code>{activeStage.latest?.tool_name ?? activeStage.defaultTool}</code></dd></div>
+              <div><dt>Latency</dt><dd>{source === "preview" ? "Preview fixture" : activeStage.events.length ? formatDuration(activeStage.latency) : "Not recorded"}</dd></div>
+              <div><dt>Result reference</dt><dd><code>{activeStage.latest?.tool_result_reference ?? "Awaiting result"}</code></dd></div>
+            </dl>
+            <div className="trace-stage-outcome"><strong>Outcome</strong><p>{traceStageSummary(activeStage.id, selected, activeStage.latest)}</p></div>
+            <TraceStageEvidence stage={activeStage.id} detail={selected}/>
+            {activeStage.events.length ? <div className="stage-event-log"><strong>Recorded actions</strong>{activeStage.events.map((event) => <div key={event.sequence}><span className={`event-marker ${event.status}`}>{event.status === "failed" || event.status === "warning" ? <AlertTriangle size={12}/> : <Check size={12}/>}</span><p>{event.message}<small><code>{event.input_reference ?? `event:${event.sequence}`}</code></small></p><time>{source === "preview" ? "fixture" : formatDuration(event.latency_ms)}</time></div>)}</div> : null}
+          </article>
+
+          <aside className="trace-live-feed" aria-live="polite">
+            <header><div><p className="eyebrow">{runState === "running" ? "LIVE FEED" : "BATCH FEED"}</p><h3>{runState === "running" ? "Controller actions" : "Latest recorded actions"}</h3></div>{runState === "running" ? <Loader2 className="spin" size={17}/> : <Activity size={17}/>}</header>
+            <div>{globalFeed.map((event) => <article key={event.sequence} className={event.status}>
+              <span className="feed-sequence">{event.sequence}</span>
+              <p><strong>{event.message}</strong><small>{titleCase(event.agent_name)} · <code>{event.tool_name ?? event.event_type}</code></small><em>{event.tool_result_reference ?? event.input_reference ?? `event:${event.sequence}`}</em></p>
+              <time>{source === "preview" ? "fixture" : `${formatDuration(event.latency_ms)} · ${new Date(event.timestamp).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", second: "2-digit", timeZone: "Asia/Kolkata" })}`}</time>
+            </article>)}</div>
+            {!globalFeed.length ? <EmptyState title="Waiting for the first action" detail="Validated tool events will appear here as the controller runs."/> : null}
+          </aside>
+        </div>
+
+        <footer className="trace-actions">
+          <span><ShieldCheck size={16}/> Structured records remain the source of truth.</span>
+          {selected.proposal ? <button className="button secondary" onClick={() => onOpenProposal(selected.proposal!.proposal_id)}>Open match evidence <ArrowRight size={15}/></button> : null}
+          {selected.exception ? <button className="button secondary" onClick={() => onOpenException(selected.exception!.exception_id)}>Open exception <ArrowRight size={15}/></button> : null}
+        </footer>
+      </div> : <EmptyState title="No transaction trace available" detail="Run a batch or choose a transaction with recorded processing data."/>}
+    </section>
+  </div>;
+}
+
+function traceRecordTone(detail: RecordDetailView): "safe" | "risk" | "review" {
+  if (detail.exception || detail.record.status === "UNRESOLVED" || detail.record.status === "REJECTED") return "risk";
+  if (detail.record.status === "AUTO_RECONCILED" || detail.record.status === "MANUALLY_RECONCILED") return "safe";
+  return "review";
+}
+
+function traceStageHasStructuredResult(stage: TraceStageId, detail: RecordDetailView): boolean {
+  if (stage === "observe") return true;
+  if (stage === "normalize") return detail.record.status !== "UNPROCESSED";
+  if (stage === "candidates") return Boolean(detail.candidates?.length || detail.proposal || detail.exception);
+  if (stage === "allocation") return Boolean(detail.proposal || detail.exception);
+  if (stage === "evidence") return Boolean(detail.evidence?.evidence.length || detail.proposal?.evidence.length || detail.exception?.evidence.length);
+  if (stage === "verify") return Boolean(detail.verification || detail.exception);
+  return Boolean(detail.decision || detail.exception);
+}
+
+function traceStageSummary(stage: TraceStageId, detail: RecordDetailView, event?: AgentEvent): string {
+  if (event?.message) return event.message;
+  if (stage === "observe") return `${detail.record.record_id} was read as a ${titleCase(detail.record.record_type)} for ${formatMoney(detail.record.amount, detail.record.currency)}.`;
+  if (stage === "normalize") return `The persisted counterparty and reference are ${detail.record.counterparty} and ${detail.record.reference}.`;
+  if (stage === "candidates") return `${detail.candidates?.length ?? 0} invoice candidates remain after currency, status, date, and identity constraints.`;
+  if (stage === "allocation") return detail.proposal ? `${detail.proposal.allocations.length} allocation${detail.proposal.allocations.length === 1 ? "" : "s"} total ${formatMoney(detail.proposal.total_allocated, detail.proposal.currency)}.` : "No allocation was safe enough to propose.";
+  if (stage === "evidence") return `${detail.evidence?.evidence.length ?? detail.proposal?.evidence.length ?? detail.exception?.evidence.length ?? 0} evidence items are attached to the record.`;
+  if (stage === "verify") return detail.verification ? `${detail.verification.approved ? "Approved" : "Not approved"} under ${detail.verification.policy_version}; the automatic threshold is ${confidencePercent(detail.verification.confidence_threshold)}.` : "No automatic approval was issued.";
+  if (detail.exception) return `${titleCase(detail.exception.reason_code)} was recorded. Next action: ${detail.exception.next_action}`;
+  return `${titleCase(detail.decision?.decision ?? detail.record.status)} was persisted through the controlled write boundary.`;
+}
+
+function TraceStageEvidence({ stage, detail }: { stage: TraceStageId; detail: RecordDetailView }) {
+  if (stage === "candidates") return <div className="trace-data-list"><strong>Candidate set</strong>{detail.candidates?.length ? detail.candidates.map((candidate) => <div key={candidate.invoice_id}><span><FileSpreadsheet size={15}/><strong>{candidate.invoice_number}</strong></span><span>{formatMoney(candidate.remaining_balance, candidate.currency)} · ref {confidencePercent(candidate.reference_similarity)}</span></div>) : <p>No eligible invoice candidates were persisted.</p>}</div>;
+  if (stage === "allocation") return <div className="trace-data-list"><strong>Deterministic allocation</strong>{detail.proposal?.allocations.length ? detail.proposal.allocations.map((allocation) => <div key={allocation.invoice_id}><span><FileCheck2 size={15}/><strong>{allocation.invoice_id}</strong></span><span>{formatMoney(allocation.amount, allocation.currency)}</span></div>) : <p>The solver did not return a commit-eligible allocation.</p>}</div>;
+  if (stage === "evidence") {
+    const evidence = detail.evidence?.evidence ?? detail.proposal?.evidence ?? detail.exception?.evidence ?? [];
+    return <div className="trace-data-list"><strong>Evidence ledger</strong>{evidence.length ? evidence.map((item) => <div key={item.evidence_id}><span><Link2 size={15}/><strong>{titleCase(item.evidence_type)}</strong></span><span>{item.summary}</span></div>) : <p>No evidence items were persisted.</p>}</div>;
+  }
+  if (stage === "verify") return <div className="trace-data-list"><strong>Policy result</strong><div><span><ShieldCheck size={15}/><strong>{detail.verification?.policy_version ?? "Verification gate"}</strong></span><span>{detail.verification?.approved ? "Approved for controlled commit" : "Automatic commit not authorized"}</span></div>{detail.verification?.reasons?.map((reason) => <p key={reason}>{reason}</p>)}</div>;
+  if (stage === "outcome") return <div className="trace-data-list"><strong>Terminal treatment</strong><div><span>{detail.exception ? <AlertTriangle size={15}/> : <BadgeCheck size={15}/>}<strong>{titleCase(detail.exception?.reason_code ?? detail.decision?.decision ?? detail.record.status)}</strong></span><span>{detail.exception?.next_action ?? detail.decision?.policy_version ?? "Recorded state"}</span></div></div>;
+  return null;
 }
 
 function ReconciliationView({ workspace, onOpen, notify }: { workspace: WorkspaceData; onOpen: (id: string) => void; notify: (message: string, kind?: ToastState["kind"]) => void }) {
@@ -1291,9 +1680,12 @@ function ExceptionQuickPanel({ item, busy, onClose, onResolve, onReview }: { ite
   return <Overlay onClose={onClose} side><article className="side-panel"><DrawerHeader icon={<AlertTriangle size={20}/>} eyebrow={item.exception_id} title={titleCase(item.reason_code)} subtitle={item.record_id} onClose={onClose}/><div className="quick-exception"><p>{DEMO_EXCEPTION_META[item.exception_id]?.explanation ?? "The controller could not establish enough safe evidence to commit this record."}</p><section className="next-action"><WandSparkles size={19}/><div><small>NEXT ACTION</small><strong>{item.next_action}</strong></div></section><h3>Evidence</h3><div className="evidence-list">{item.evidence.map((evidence) => <div key={evidence.evidence_id}><span><Link2 size={15}/></span><p><strong>{titleCase(evidence.evidence_type)}</strong><small>{evidence.summary}</small></p></div>)}</div><label className="field-label">Resolution<textarea value={resolution} onChange={(event) => setResolution(event.target.value)} placeholder="Add supporting evidence and treatment…"/></label></div><footer className="drawer-footer"><button className="button secondary" disabled={item.status === "IN_REVIEW" || busy === `review:${item.exception_id}`} onClick={() => void onReview(item)}><UserCheck size={16}/> Request review</button><button className="button primary" disabled={!resolution.trim() || busy === `resolve:${item.exception_id}`} onClick={() => void onResolve(item, resolution)}><Check size={16}/> Resolve</button></footer></article></Overlay>;
 }
 
-function NewBatchDialog({ connection, busy, onClose, onDemo, onUpload, notify }: { connection: Connection; busy: boolean; onClose: () => void; onDemo: () => void; onUpload: (files: Record<FileKind, UploadState>) => void; notify: (message: string, kind?: ToastState["kind"]) => void }) {
+function NewBatchDialog({ connection, capabilities, busy, onClose, onDemo, onUpload, notify }: { connection: Connection; capabilities: RuntimeCapabilitiesView | null; busy: boolean; onClose: () => void; onDemo: (mode: ExecutionMode) => void; onUpload: (files: Record<FileKind, UploadState>, mode: ExecutionMode) => void; notify: (message: string, kind?: ToastState["kind"]) => void }) {
   const [tab, setTab] = useState<"demo" | "upload">("demo");
   const [files, setFiles] = useState<Partial<Record<FileKind, UploadState>>>({});
+  const agenticAvailable = capabilities?.responses_mode_configured === true;
+  const [executionMode, setExecutionMode] = useState<ExecutionMode>(agenticAvailable ? "agentic" : "deterministic");
+  const selectedExecutionMode: ExecutionMode = agenticAvailable ? executionMode : "deterministic";
   const readFile = async (kind: FileKind, file?: File) => {
     if (!file) return;
     if (!file.name.toLowerCase().endsWith(".csv")) {
@@ -1311,12 +1703,62 @@ function NewBatchDialog({ connection, busy, onClose, onDemo, onUpload, notify }:
     downloadBlob(new Blob([`${FILE_REQUIREMENTS[kind].columns.join(",")}\n`], { type: "text/csv" }), `${kind}.csv`);
     notify(`${FILE_REQUIREMENTS[kind].label} template downloaded`);
   };
-  return <Overlay onClose={busy ? undefined : onClose}><article className="modal new-batch-modal"><DrawerHeader icon={<Plus size={20}/>} eyebrow="NEW CLOSE BATCH" title="Choose the truth layer" subtitle="Run the reproducible hackathon set or validate your own four source files." onClose={onClose}/><div className="modal-tabs"><button className={tab === "demo" ? "active" : ""} onClick={() => setTab("demo")}><Sparkles size={17}/> Demo truth set</button><button className={tab === "upload" ? "active" : ""} onClick={() => setTab("upload")}><UploadCloud size={17}/> Upload CSVs</button></div>{tab === "demo" ? <div className="demo-launch"><div className="demo-hero"><span><Database size={25}/></span><div><p className="eyebrow">FIXED SEED · REPRODUCIBLE</p><h3>290 financial records with planted edge cases</h3><p>Exact matches, aliases, partial and combined payments, fees, duplicates, currency conflicts, ambiguity, and unreconcilable cash.</p></div></div><div className="demo-counts"><span><strong>80</strong>bank transactions</span><span><strong>100</strong>invoices</span><span><strong>70</strong>ledger entries</span><span><strong>40</strong>remittances</span></div><ul className="feature-checks"><li><Check size={15}/> Ground truth is kept outside the agent boundary</li><li><Check size={15}/> Allocation and cash calculations use deterministic code</li><li><Check size={15}/> The run finishes without an OpenAI API key</li></ul><div className={`api-readiness ${connection}`}><Server size={17}/><span><strong>{connection === "online" ? "Docker API is ready" : connection === "checking" ? "Checking Docker API…" : "Docker API is not reachable"}</strong><small>{connection === "offline" ? "Start docker compose, then try again. The preview remains usable." : "The run will create real backend records and audit events."}</small></span></div></div> : <div className="upload-workflow"><div className="upload-grid">{(Object.entries(FILE_REQUIREMENTS) as Array<[FileKind, typeof FILE_REQUIREMENTS[FileKind]]>).map(([kind, config]) => { const selected = files[kind]; return <div className={`upload-card ${selected?.issue ? "invalid" : selected ? "ready" : ""}`} key={kind}><label><span className="upload-icon">{selected?.issue ? <AlertTriangle size={20}/> : selected ? <FileCheck2 size={20}/> : <FileSpreadsheet size={20}/>}</span><span><strong>{config.label}</strong><small>{selected ? `${selected.file.name} · ${selected.rows} rows` : config.columns.join(", ")}</small>{selected?.issue ? <em>{selected.issue}</em> : selected ? <em>{selected.columns.length} columns validated</em> : null}</span><input type="file" accept=".csv,text/csv" onChange={(event) => void readFile(kind, event.target.files?.[0])}/></label><button className="text-button" onClick={() => downloadTemplate(kind)}>Template</button></div>; })}</div><div className={`validation-summary ${ready ? "ready" : "waiting"}`}>{ready ? <CheckCircle2 size={20}/> : <Clock3 size={20}/>}<span><strong>{ready ? "All four schemas are ready" : `${Object.keys(files).length} of 4 files selected`}</strong><small>{ready ? "Server validation runs again before the controller starts." : "Select each CSV and resolve every required-column issue."}</small></span></div></div>}<footer className="modal-footer"><button className="button secondary" onClick={onClose} disabled={busy}>Cancel</button>{tab === "demo" ? <button className="button primary" onClick={onDemo} disabled={busy || connection !== "online"}>{busy ? <Loader2 className="spin" size={16}/> : <Play size={16}/>} Run demo controller</button> : <button className="button primary" onClick={() => ready && onUpload(files as Record<FileKind, UploadState>)} disabled={!ready || busy || connection !== "online"}>{busy ? <Loader2 className="spin" size={16}/> : <UploadCloud size={16}/>} Upload & run</button>}</footer></article></Overlay>;
+  return <Overlay onClose={busy ? undefined : onClose}>
+    <article className="modal new-batch-modal">
+      <DrawerHeader icon={<Plus size={20}/>} eyebrow="NEW CLOSE BATCH" title="Choose the truth layer" subtitle="Run the reproducible hackathon set or validate your own four source files." onClose={onClose}/>
+      <div className="modal-tabs"><button className={tab === "demo" ? "active" : ""} onClick={() => setTab("demo")}><Sparkles size={17}/> Demo truth set</button><button className={tab === "upload" ? "active" : ""} onClick={() => setTab("upload")}><UploadCloud size={17}/> Upload CSVs</button></div>
+      <section className="execution-mode-section" aria-labelledby="execution-mode-title">
+        <div><p className="eyebrow">EXECUTION MODE</p><h3 id="execution-mode-title">Choose how the controller plans</h3></div>
+        <div className="execution-mode-options" role="radiogroup" aria-label="Controller execution mode">
+          {agenticAvailable ? <button role="radio" aria-checked={selectedExecutionMode === "agentic"} className={selectedExecutionMode === "agentic" ? "active" : ""} onClick={() => setExecutionMode("agentic")}>
+            <span><Sparkles size={19}/></span><span><strong>Agentic Responses</strong><small>{capabilities?.responses_model} chooses investigations and tools; deterministic code still owns every financial action.</small></span><i>{selectedExecutionMode === "agentic" ? <Check size={13}/> : null}</i>
+          </button> : null}
+          <button role="radio" aria-checked={selectedExecutionMode === "deterministic"} className={selectedExecutionMode === "deterministic" ? "active" : ""} onClick={() => setExecutionMode("deterministic")}>
+            <span><Database size={19}/></span><span><strong>Deterministic demo</strong><small>Rule-driven orchestration with no model calls. Matching, money, writes, and metrics remain deterministic.</small></span><i>{selectedExecutionMode === "deterministic" ? <Check size={13}/> : null}</i>
+          </button>
+        </div>
+        {!agenticAvailable ? <p className="capability-note"><LockKeyhole size={15}/><span>Agentic Responses is not configured by this backend. This run will use the deterministic controller and will not be labeled as a model run.</span></p> : null}
+      </section>
+      {tab === "demo" ? <div className="demo-launch">
+        <div className="demo-hero"><span><Database size={25}/></span><div><p className="eyebrow">FIXED SEED · REPRODUCIBLE</p><h3>290 financial records with planted edge cases</h3><p>Exact matches, aliases, partial and combined payments, fees, duplicates, currency conflicts, ambiguity, and unreconcilable cash.</p></div></div>
+        <div className="demo-counts"><span><strong>80</strong>bank transactions</span><span><strong>100</strong>invoices</span><span><strong>70</strong>ledger entries</span><span><strong>40</strong>remittances</span></div>
+        <ul className="feature-checks"><li><Check size={15}/> Ground truth is kept outside the controller boundary</li><li><Check size={15}/> Allocation and cash calculations use deterministic code</li><li><Check size={15}/> {selectedExecutionMode === "agentic" ? "Responses plans tool selection; every write remains guarded" : "No OpenAI model call is made in this mode"}</li></ul>
+        <div className={`api-readiness ${connection}`}><Server size={17}/><span><strong>{connection === "online" ? "Docker API is ready" : connection === "checking" ? "Checking Docker API…" : "Docker API is not reachable"}</strong><small>{connection === "offline" ? "Start docker compose, then try again. The preview remains usable." : "The run will create real backend records and audit events."}</small></span></div>
+      </div> : <div className="upload-workflow">
+        <div className="upload-grid">{(Object.entries(FILE_REQUIREMENTS) as Array<[FileKind, typeof FILE_REQUIREMENTS[FileKind]]>).map(([kind, config]) => { const selected = files[kind]; return <div className={`upload-card ${selected?.issue ? "invalid" : selected ? "ready" : ""}`} key={kind}><label><span className="upload-icon">{selected?.issue ? <AlertTriangle size={20}/> : selected ? <FileCheck2 size={20}/> : <FileSpreadsheet size={20}/>}</span><span><strong>{config.label}</strong><small>{selected ? `${selected.file.name} · ${selected.rows} rows` : config.columns.join(", ")}</small>{selected?.issue ? <em>{selected.issue}</em> : selected ? <em>{selected.columns.length} columns validated</em> : null}</span><input type="file" accept=".csv,text/csv" onChange={(event) => void readFile(kind, event.target.files?.[0])}/></label><button className="text-button" onClick={() => downloadTemplate(kind)}>Template</button></div>; })}</div>
+        <div className={`validation-summary ${ready ? "ready" : "waiting"}`}>{ready ? <CheckCircle2 size={20}/> : <Clock3 size={20}/>}<span><strong>{ready ? "All four schemas are ready" : `${Object.keys(files).length} of 4 files selected`}</strong><small>{ready ? "Server validation runs again before the controller starts." : "Select each CSV and resolve every required-column issue."}</small></span></div>
+      </div>}
+      <footer className="modal-footer"><button className="button secondary" onClick={onClose} disabled={busy}>Cancel</button>{tab === "demo" ? <button className="button primary" onClick={() => onDemo(selectedExecutionMode)} disabled={busy || connection !== "online"}>{busy ? <Loader2 className="spin" size={16}/> : <Play size={16}/>} Run {selectedExecutionMode === "agentic" ? "with Responses" : "deterministic demo"}</button> : <button className="button primary" onClick={() => ready && onUpload(files as Record<FileKind, UploadState>, selectedExecutionMode)} disabled={!ready || busy || connection !== "online"}>{busy ? <Loader2 className="spin" size={16}/> : <UploadCloud size={16}/>} Upload & run</button>}</footer>
+    </article>
+  </Overlay>;
 }
 
-function RunPanel({ state, events, batch, onClose, onResults }: { state: "idle" | "running" | "complete" | "failed"; events: AgentEvent[]; batch: BatchView; onClose: () => void; onResults: () => void }) {
-  const progress = state === "complete" ? 100 : state === "failed" ? 100 : Math.min(92, 8 + events.length * 9);
-  return <Overlay onClose={state === "running" ? undefined : onClose} side><article className="side-panel run-panel"><DrawerHeader icon={state === "complete" ? <CheckCircle2 size={20}/> : state === "failed" ? <XCircle size={20}/> : <Bot size={20}/>} eyebrow={batch.batch_id} title={state === "complete" ? "Close complete" : state === "failed" ? "Run stopped safely" : "Controller is working"} subtitle={state === "running" ? "Tool actions stream here without exposing hidden reasoning." : batch.status.replaceAll("_", " ")} onClose={state === "running" ? undefined : onClose}/><div className="run-progress"><div><i style={{ width: `${progress}%` }}/></div><span><strong>{progress}%</strong>{state === "running" ? "Processing records" : state === "complete" ? "Terminal state reached" : "Review run result"}</span></div><section className="guardrail-note"><LockKeyhole size={18}/><span><strong>Financial guardrail active</strong><small>The controller chooses investigations. Code owns arithmetic, constraints, verification, and writes.</small></span></section><div className="run-stage-list">{POLICY_STAGES.map((stage, index) => { const event = events[index]; const complete = Boolean(event) || state === "complete"; const active = !complete && state === "running" && index === Math.min(events.length, POLICY_STAGES.length - 1); return <div key={stage} className={`${complete ? "complete" : ""} ${active ? "active" : ""}`}><span>{complete ? <Check size={14}/> : active ? <Loader2 className="spin" size={14}/> : index + 1}</span><p><strong>{titleCase(stage)}</strong><small>{event?.message ?? "Waiting for the previous policy gate"}</small>{event?.tool_name ? <code>{event.tool_name} · {formatDuration(event.latency_ms)}</code> : null}</p><time>{event ? new Date(event.timestamp).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", second: "2-digit", timeZone: "Asia/Kolkata" }) : "—"}</time></div>; })}</div>{events.length > POLICY_STAGES.length ? <div className="additional-events"><strong>Additional controller actions</strong>{events.slice(POLICY_STAGES.length).map((event) => <span key={event.sequence}><CheckCircle2 size={15}/><p>{event.message}<small>{event.tool_name}</small></p></span>)}</div> : null}<footer className="drawer-footer">{state === "running" ? <span className="running-note"><Loader2 className="spin" size={17}/> Keep this panel open to follow the live trace</span> : <button className="button primary full" onClick={onResults}>Open controller results <ArrowRight size={16}/></button>}</footer></article></Overlay>;
+function RunPanel({ state, error, events, batch, orchestrationMode, processingTimeMs, onClose, onTrace, onResults }: { state: "idle" | "running" | "complete" | "failed"; error: string | null; events: AgentEvent[]; batch: BatchView; orchestrationMode: string; processingTimeMs: number; onClose: () => void; onTrace: () => void; onResults: () => void }) {
+  const stageEvents = TRACE_STAGES.map((stage) => events.filter((event) => traceStageForEvent(event) === stage.id));
+  const completedStages = stageEvents.filter((items) => items.some((event) => event.status === "succeeded" || event.status === "warning")).length;
+  const progress = state === "complete" || state === "failed" ? 100 : Math.min(96, Math.round((completedStages / TRACE_STAGES.length) * 100));
+  const agentic = orchestrationMode.startsWith("responses");
+  const responsesPending = orchestrationMode === "responses-requested";
+  const latestEvents = [...events].sort((a, b) => b.sequence - a.sequence).slice(0, 8);
+  return <Overlay onClose={onClose} side>
+    <article className="side-panel run-panel">
+      <DrawerHeader icon={state === "complete" ? <CheckCircle2 size={20}/> : state === "failed" ? <XCircle size={20}/> : <Bot size={20}/>} eyebrow={batch.batch_id} title={state === "complete" ? "Close complete" : state === "failed" ? "Run stopped safely" : "Controller is working"} subtitle={state === "running" ? "Live operational events—no hidden reasoning or artificial delays." : batch.status.replaceAll("_", " ")} onClose={onClose}/>
+      <div className={`run-mode-banner ${agentic ? "agentic" : "deterministic"}`}>{agentic ? <Sparkles size={17}/> : <Database size={17}/>}<span><strong>{agentic ? `OpenAI Responses${responsesPending ? " requested" : ""}` : "Deterministic controller"}</strong><small>{agentic ? responsesPending ? "Waiting for the backend to confirm the completed orchestration mode" : "Model-guided tool planning; deterministic financial execution" : "Rule-driven orchestration; no model calls"}</small></span>{state === "complete" ? <em>{formatDuration(processingTimeMs)} total</em> : <em>Live</em>}</div>
+      <div className="run-progress"><div><i style={{ width: `${progress}%` }}/></div><span><strong>{progress}%</strong>{state === "running" ? `${events.length} recorded actions` : state === "complete" ? `Terminal state · ${formatDuration(processingTimeMs)} measured` : "Review run result"}</span></div>
+      {state === "failed" && error ? <section className="run-error"><AlertTriangle size={18}/><span><strong>Why this run stopped</strong><small>{error}</small></span></section> : <section className="guardrail-note"><LockKeyhole size={18}/><span><strong>Financial guardrail active</strong><small>Models may choose investigations. Code owns arithmetic, constraints, verification, metrics, and writes.</small></span></section>}
+      <div className="run-stage-list">{TRACE_STAGES.map((stage, index) => {
+        const relevant = stageEvents[index];
+        const event = relevant.at(-1);
+        const failed = relevant.some((item) => item.status === "failed");
+        const warned = relevant.some((item) => item.status === "warning");
+        const complete = Boolean(event && event.status !== "started") || state === "complete";
+        const active = !complete && state === "running" && (event?.status === "started" || index === completedStages);
+        return <div key={stage.id} className={`${complete ? "complete" : ""} ${active ? "active" : ""} ${failed || warned ? "warning" : ""}`}><span>{failed || warned ? <AlertTriangle size={14}/> : complete ? <Check size={14}/> : active ? <Loader2 className="spin" size={14}/> : index + 1}</span><p><strong>{stage.label}</strong><small>{event?.message ?? "Waiting for a recorded tool result"}</small><code>{event?.tool_name ?? stage.defaultTool}{event ? ` · ${formatDuration(event.latency_ms)}` : ""}</code></p><time>{event ? new Date(event.timestamp).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", second: "2-digit", timeZone: "Asia/Kolkata" }) : "—"}</time></div>;
+      })}</div>
+      <div className="additional-events run-live-events" aria-live="polite"><strong>Live tool feed</strong>{latestEvents.map((event) => <span key={event.sequence}>{event.status === "failed" || event.status === "warning" ? <AlertTriangle size={15}/> : <CheckCircle2 size={15}/>}<p>{event.message}<small>{titleCase(event.agent_name)} · {event.tool_name ?? event.event_type} · {formatDuration(event.latency_ms)}</small></p></span>)}{!latestEvents.length ? <small>Waiting for the first backend event…</small> : null}</div>
+      <footer className="drawer-footer"><button className="button secondary" onClick={onTrace}>Open transaction trace</button>{state === "running" ? <span className="running-note"><Loader2 className="spin" size={17}/> Processing continues if this panel closes</span> : state === "failed" ? <button className="button primary" onClick={onClose}>Close</button> : <button className="button primary" onClick={onResults}>Open results <ArrowRight size={16}/></button>}</footer>
+    </article>
+  </Overlay>;
 }
 
 function ScenarioPanel({ currency, busy, onClose, onRun }: { currency: string; busy: boolean; onClose: () => void; onRun: (request: ScenarioRequest) => Promise<void> }) {

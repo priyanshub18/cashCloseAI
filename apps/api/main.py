@@ -18,6 +18,7 @@ from .schemas import (
     BatchValidationView,
     BatchView,
     AgentEventPage,
+    AgentTraceView,
     ApproveMatchRequest,
     CreateBatchRequest,
     EvaluationView,
@@ -28,6 +29,7 @@ from .schemas import (
     RecordList,
     RejectMatchRequest,
     ResolveExceptionRequest,
+    RuntimeCapabilitiesView,
     RunBatchRequest,
     RunBatchResponse,
     ScenarioRequest,
@@ -98,6 +100,14 @@ def create_app(service: CashCloseService | None = None) -> FastAPI:
     @application.get("/health", tags=["system"])
     def health() -> dict[str, str]:
         return {"status": "ok", "service": "cashclose-api"}
+
+    @application.get(
+        "/api/capabilities",
+        response_model=RuntimeCapabilitiesView,
+        tags=["system"],
+    )
+    def get_capabilities() -> RuntimeCapabilitiesView:
+        return _service(application).get_runtime_capabilities()
 
     @application.post("/api/batches", response_model=BatchView, status_code=201, tags=["batches"])
     def create_batch(payload: CreateBatchRequest) -> BatchView:
@@ -181,6 +191,35 @@ def create_app(service: CashCloseService | None = None) -> FastAPI:
         after_sequence: int = Query(default=0, ge=0),
     ) -> AgentEventPage:
         return _service(application).event_page(batch_id, after_sequence)
+
+    @application.get(
+        "/api/batches/{batch_id}/trace",
+        response_model=AgentTraceView,
+        tags=["batches"],
+    )
+    def get_batch_trace(
+        batch_id: str,
+        after_sequence: int = Query(default=0, ge=0),
+        limit: int = Query(default=500, ge=1, le=2_000),
+        record_id: str | None = Query(
+            default=None,
+            min_length=1,
+            max_length=128,
+            pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+        ),
+        agent_name: agent_schemas.AgentName | None = Query(default=None),
+        tool_name: str | None = Query(default=None, min_length=1, max_length=100),
+        status: agent_schemas.EventStatus | None = Query(default=None),
+    ) -> AgentTraceView:
+        return _service(application).get_agent_trace(
+            batch_id,
+            after_sequence=after_sequence,
+            limit=limit,
+            record_id=record_id,
+            agent_name=agent_name,
+            tool_name=tool_name,
+            status=status,
+        )
 
     @application.get(
         "/api/batches/{batch_id}/records",

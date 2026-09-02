@@ -1,6 +1,9 @@
 import type {
   AgentEvent,
   AgentEventPage,
+  AgentName,
+  AgentTraceView,
+  AgentEventStatus,
   ApiErrorEnvelope,
   ApproveMatchRequest,
   AuditDownload,
@@ -29,6 +32,7 @@ import type {
   RecordList,
   RejectMatchRequest,
   ResolveExceptionRequest,
+  RuntimeCapabilitiesView,
   RunBatchRequest,
   RunBatchResponse,
   RunCashForecastResult,
@@ -74,6 +78,15 @@ export interface WatchBatchEventsOptions extends ApiRequestOptions {
     transport: "stream" | "poll",
     reason?: CashCloseApiError,
   ) => void;
+}
+
+export interface GetBatchTraceOptions extends ApiRequestOptions {
+  afterSequence?: number;
+  limit?: number;
+  recordId?: string;
+  agentName?: AgentName;
+  toolName?: string;
+  status?: AgentEventStatus;
 }
 
 interface OpenResponse {
@@ -561,6 +574,10 @@ export class CashCloseClient {
     return this.requestJson<HealthResponse>("/health", {}, options);
   }
 
+  getCapabilities(options?: ApiRequestOptions): Promise<RuntimeCapabilitiesView> {
+    return this.requestJson<RuntimeCapabilitiesView>("/api/capabilities", {}, options);
+  }
+
   createBatch(
     request: CreateBatchRequest = {},
     options?: ApiRequestOptions,
@@ -895,6 +912,33 @@ export class CashCloseClient {
     const query = new URLSearchParams({ after_sequence: String(afterSequence) });
     return this.requestJson<AgentEventPage>(
       `/api/batches/${encodePathPart(batchId, "batchId")}/events/snapshot?${query}`,
+      {},
+      options,
+    );
+  }
+
+  getBatchTrace(
+    batchId: string,
+    options: GetBatchTraceOptions = {},
+  ): Promise<AgentTraceView> {
+    const afterSequence = options.afterSequence ?? 0;
+    const limit = options.limit ?? 500;
+    if (!Number.isInteger(afterSequence) || afterSequence < 0) {
+      throw new TypeError("afterSequence must be a non-negative integer");
+    }
+    if (!Number.isInteger(limit) || limit < 1 || limit > 2000) {
+      throw new TypeError("limit must be an integer between 1 and 2000");
+    }
+    const query = new URLSearchParams({
+      after_sequence: String(afterSequence),
+      limit: String(limit),
+    });
+    if (options.recordId) query.set("record_id", options.recordId);
+    if (options.agentName) query.set("agent_name", options.agentName);
+    if (options.toolName) query.set("tool_name", options.toolName);
+    if (options.status) query.set("status", options.status);
+    return this.requestJson<AgentTraceView>(
+      `/api/batches/${encodePathPart(batchId, "batchId")}/trace?${query}`,
       {},
       options,
     );
