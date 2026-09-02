@@ -28,7 +28,7 @@ test("server-renders the CashClose controller", async () => {
   assert.match(html, /Run controller/);
   assert.match(html, /Interactive truth-set preview/);
   assert.match(html, /The close is explainable/);
-  assert.match(html, /https:\/\/cashclose\.example\/og-v2\.png/);
+  assert.match(html, /https:\/\/cashclose\.example\/og-v2\.jpg/);
   assert.doesNotMatch(html, /codex-preview|Your site is taking shape|react-loading-skeleton/i);
 });
 
@@ -49,6 +49,6 @@ test("ships the product asset and removes starter preview code", async () => {
   assert.match(page, /CashCloseApp/);
   assert.match(layout, /openGraph/);
   assert.doesNotMatch(packageJson, /react-loading-skeleton/);
-  await access(new URL("../public/og-v2.png", import.meta.url));
+  await access(new URL("../public/og-v2.jpg", import.meta.url));
   await assert.rejects(access(new URL("app/_sites-preview/SkeletonPreview.tsx", root)));
 });
