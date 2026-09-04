@@ -20,7 +20,7 @@ ground truth.
   approval, rejection, and edit controls
 - Exception inbox that explains why automatic writes were blocked
 - Confirmed, expected, and risk-adjusted forecast lines using Recharts
-- Interactive “Acme pays seven days late” scenario and corrective action
+- Interactive “Acme pays seven days late” scenario with recalculated cash impact
 - Replayable controller timeline that exposes tool actions—not hidden reasoning
 - Searchable transaction trace with observe, normalize, candidate, allocation,
   evidence, verification, and commit/exception gates for every bank record
@@ -35,6 +35,8 @@ ground truth.
 - Idempotent commit, verifier approval, currency checks, invoice-reuse
   prevention, and hard-risk exception routing
 - Synthetic 335-row visible dataset plus evaluator-only truth artifacts
+- A timed, ten-chapter five-minute showcase with presenter captions, optional
+  browser narration, and explicit current-versus-target architecture
 
 ## Repository map
 
@@ -62,6 +64,14 @@ npm run dev
 ```
 
 Open `http://localhost:3000`. All interface paths work without credentials.
+
+For a judge-ready guided tour, click **5-minute showcase** in the sidebar or
+open `http://localhost:3000/?showcase=1`. The tour runs for exactly five
+minutes, can be paused or chapter-skipped, and includes an optional Narration
+toggle. **Record 5:00** asks the browser to capture the CashClose tab, restarts
+the tour, stops at five minutes, and downloads a WebM recording locally. It uses
+the active workspace values while clearly distinguishing live controller
+records from the curated preview fixture.
 
 ### API
 
@@ -114,10 +124,21 @@ PostgreSQL on `localhost:54322`, and Redis on `localhost:6379`. Apply
 `migrations/0001_cashclose_truth_layer.sql` through Supabase or `psql` before
 connecting a persistent repository implementation.
 
+The current hackathon API keeps batch state in process memory. PostgreSQL and
+Redis are started as production-target infrastructure but are not yet the
+active repository or background-job runtime; the UI labels this boundary
+explicitly.
+
 Open **New close batch → Execution mode** in the UI. When the API key is
-available, **Agentic Responses** is offered; otherwise the only selectable mode
-is the honestly labeled **Deterministic demo**. Open **Agent trace** during or
+available, **Agentic Responses** is enabled; otherwise it remains visible but
+locked beside the honestly labeled **Deterministic demo**. Open **Agent trace** during or
 after a run to inspect each transaction and its recorded tool outcomes.
+
+Responses-guided batches persist structured planning provenance in the batch
+view: model, both response IDs, the selected observation tools, the selected
+strategy, and measured planning latency. The trace presents this separately
+from deterministic transaction tools so it never implies an LLM call occurred
+for every record.
 
 The deterministic demo can finish in a fraction of a second because it runs
 local, in-memory validated functions with no model-network round trips. That is

@@ -242,6 +242,9 @@ def test_service_model_path_completes_with_truthful_provenance_and_deterministic
     assert provenance.model == MODEL
     assert provenance.response_ids == ["resp_observe_001", "resp_strategy_001"]
     assert provenance.strategy.forecast_method == "deterministic"
+    persisted_batch = service.get_batch(batch.batch_id)
+    assert persisted_batch.orchestration_mode == run.orchestration_mode
+    assert persisted_batch.model_provenance == provenance
     assert all(
         decision.decision_source == "deterministic_policy" and decision.model_name is None
         for decision in service._batches[actual_batch_id].decisions.values()
@@ -281,6 +284,9 @@ def test_deterministic_service_run_has_no_model_claim_or_provenance() -> None:
 
     assert run.orchestration_mode == "deterministic-demo"
     assert run.controller.model_provenance is None
+    persisted_batch = service.get_batch(batch.batch_id)
+    assert persisted_batch.orchestration_mode == "deterministic-demo"
+    assert persisted_batch.model_provenance is None
     assert not any(
         event.event_type.startswith("model_")
         for event in service._batches[batch.batch_id].events

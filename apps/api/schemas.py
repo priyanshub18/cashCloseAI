@@ -52,6 +52,8 @@ class BatchView(ApiSchema):
     created_at: datetime
     updated_at: datetime
     terminal: bool
+    orchestration_mode: str = "deterministic-demo"
+    model_provenance: agent_schemas.ModelOrchestrationProvenance | None = None
 
 
 class RunBatchRequest(ApiSchema):

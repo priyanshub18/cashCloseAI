@@ -179,6 +179,8 @@ class BatchState:
     tool_calls: list[tuple[str, datetime]] = field(default_factory=list)
     processing_started_at: float | None = None
     processing_time_ms: int = 0
+    orchestration_mode: str = "deterministic-demo"
+    model_provenance: s.ModelOrchestrationProvenance | None = None
 
 
 class CashCloseService:
@@ -465,6 +467,8 @@ class CashCloseService:
 
         with self._lock:
             state = self._get_batch(batch_id)
+            state.orchestration_mode = mode
+            state.model_provenance = guided_plan.provenance if guided_plan else None
             if state.current_forecast_id:
                 state.forecast_metrics = self._tool_calculate_forecast_metrics(
                     s.CalculateForecastMetricsInput(forecast_id=state.current_forecast_id)
@@ -3195,6 +3199,8 @@ class CashCloseService:
             created_at=state.created_at,
             updated_at=state.updated_at,
             terminal=state.status.terminal,
+            orchestration_mode=state.orchestration_mode,
+            model_provenance=state.model_provenance,
         )
 
     @staticmethod

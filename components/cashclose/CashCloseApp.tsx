@@ -20,6 +20,7 @@ import {
   Bot,
   Check,
   CheckCircle2,
+  ChevronLeft,
   ChevronDown,
   ChevronRight,
   CircleDollarSign,
@@ -35,6 +36,9 @@ import {
   Loader2,
   LockKeyhole,
   Menu,
+  MonitorPlay,
+  Network,
+  Pause,
   Play,
   Plus,
   RefreshCw,
@@ -42,9 +46,14 @@ import {
   Server,
   ShieldCheck,
   SlidersHorizontal,
+  Square,
   Sparkles,
+  TimerReset,
   UploadCloud,
   UserCheck,
+  Video,
+  Volume2,
+  VolumeX,
   WandSparkles,
   X,
   XCircle,
@@ -79,6 +88,7 @@ import type {
   FileKind,
   MatchList,
   MatchProposal,
+  ModelOrchestrationProvenance,
   ReconciliationDecision,
   RecordDetailView,
   RuntimeCapabilitiesView,
@@ -110,6 +120,17 @@ type View = "overview" | "trace" | "reconciliation" | "exceptions" | "forecast" 
 type Connection = "checking" | "online" | "offline";
 type Source = "preview" | "live";
 type ExecutionMode = "agentic" | "deterministic";
+type ShowcaseSceneId =
+  | "opening"
+  | "problem"
+  | "architecture"
+  | "truth"
+  | "planning"
+  | "reconciliation"
+  | "exception"
+  | "forecast"
+  | "audit"
+  | "closing";
 type TraceStageId =
   | "observe"
   | "normalize"
@@ -230,6 +251,112 @@ const TRACE_STAGES: Array<{
   { id: "verify", label: "Verify", agent: "verification", defaultTool: "verify_match" },
   { id: "outcome", label: "Commit or exception", agent: "controller", defaultTool: "commit_match / create_exception" },
 ];
+
+const SHOWCASE_SCENES: Array<{
+  id: ShowcaseSceneId;
+  label: string;
+  eyebrow: string;
+  title: string;
+  narration: string;
+  durationSeconds: number;
+  icon: LucideIcon;
+}> = [
+  {
+    id: "opening",
+    label: "The outcome",
+    eyebrow: "CASHCLOSE AI · FIVE-MINUTE PRODUCT TOUR",
+    title: "Know the cash. Prove the close.",
+    narration: "CashClose is an agentic reconciliation controller. It establishes the verified cash position, forecasts the next thirty days, and explains every exception without allowing a model to invent financial arithmetic.",
+    durationSeconds: 25,
+    icon: Sparkles,
+  },
+  {
+    id: "problem",
+    label: "Why it matters",
+    eyebrow: "THE CONTROLLER PROBLEM",
+    title: "A balance is only useful when you can defend it.",
+    narration: "Finance teams lose time connecting bank transactions, invoices, remittances, and ledger entries. A fast answer is not enough. Each match needs evidence, unsafe cases need an explicit exception, and the forecast must begin with verified cash.",
+    durationSeconds: 25,
+    icon: AlertTriangle,
+  },
+  {
+    id: "architecture",
+    label: "Architecture",
+    eyebrow: "AGENTIC CONTROL PLANE",
+    title: "The model investigates. Code controls the money.",
+    narration: "One bounded controller plans the batch. Reconciliation, verification, and forecasting specialists operate through strict tools. Decimal arithmetic, allocation constraints, idempotent writes, and financial metrics remain inside deterministic Python services.",
+    durationSeconds: 40,
+    icon: Network,
+  },
+  {
+    id: "truth",
+    label: "Truth layer",
+    eyebrow: "VALIDATED SOURCE DATA",
+    title: "Four files enter. One auditable batch emerges.",
+    narration: "The truth layer validates bank transactions, invoices, ledger entries, and remittances before a run starts. Every amount carries a currency, every timestamp has an accounting context, and private ground truth stays outside the agent boundary.",
+    durationSeconds: 25,
+    icon: Database,
+  },
+  {
+    id: "planning",
+    label: "Agent planning",
+    eyebrow: "OPENAI RESPONSES · BOUNDED TOOL USE",
+    title: "Real model decisions, with a hard execution boundary.",
+    narration: "In agentic mode, the first Responses turn selects read-only observations. The application executes those tools and returns structured results. A second turn selects the record order, candidate breadth, and forecast strategy. The model never receives permission to calculate or write money directly.",
+    durationSeconds: 40,
+    icon: Bot,
+  },
+  {
+    id: "reconciliation",
+    label: "Reconciliation",
+    eyebrow: "TRANSACTION-LEVEL TRACE",
+    title: "Follow one payment through every control gate.",
+    narration: "For each transaction, CashClose normalizes references, narrows candidates, solves allocations, assembles evidence, verifies policy, and only then commits. Combined payments can be allocated across invoices while exact decimal constraints prevent reuse or over-allocation.",
+    durationSeconds: 45,
+    icon: ArrowLeftRight,
+  },
+  {
+    id: "exception",
+    label: "Safe abstention",
+    eyebrow: "EXPLAINED EXCEPTIONS",
+    title: "When evidence is weak, the agent refuses to guess.",
+    narration: "Ambiguity, missing invoices, duplicate references, currency conflicts, or hard policy flags force an exception. The reviewer receives the evidence, reason code, risk, and recommended next action instead of an invented match.",
+    durationSeconds: 25,
+    icon: ShieldCheck,
+  },
+  {
+    id: "forecast",
+    label: "30-day forecast",
+    eyebrow: "VERIFIED CASH FORWARD",
+    title: "Reconciliation becomes a decision-ready forecast.",
+    narration: "The forecast starts from verified opening cash. Confirmed, expected, and risk-adjusted paths are calculated in code. Scenario controls show what happens when a customer pays late, an outflow moves, or a one-time payment lands.",
+    durationSeconds: 40,
+    icon: Activity,
+  },
+  {
+    id: "audit",
+    label: "Proof",
+    eyebrow: "INDEPENDENT EVALUATION",
+    title: "Precision, coverage, value, and risk—measured.",
+    narration: "An evaluator that the agent cannot access compares results with private ground truth. Judges can inspect precision, recall, automation coverage, false approvals, exception recall, forecast error, and the complete audit trail.",
+    durationSeconds: 20,
+    icon: BadgeCheck,
+  },
+  {
+    id: "closing",
+    label: "The close",
+    eyebrow: "THE CASHCLOSE DIFFERENCE",
+    title: "Agentic where judgment helps. Deterministic where correctness matters.",
+    narration: "CashClose turns a pile of finance files into a verified position, an explained exception queue, and a thirty-day cash outlook. Every important action remains visible, reviewable, and safe to repeat.",
+    durationSeconds: 15,
+    icon: CheckCircle2,
+  },
+];
+
+const SHOWCASE_TOTAL_SECONDS = SHOWCASE_SCENES.reduce(
+  (total, scene) => total + scene.durationSeconds,
+  0,
+);
 
 function confidencePercent(value: string | undefined): string {
   if (!value) return "—";
@@ -492,6 +619,7 @@ export function CashCloseApp() {
   const [source, setSource] = useState<Source>("preview");
   const [connection, setConnection] = useState<Connection>("checking");
   const [capabilities, setCapabilities] = useState<RuntimeCapabilitiesView | null>(null);
+  const [capabilitiesRefreshing, setCapabilitiesRefreshing] = useState(false);
   const [orchestrationMode, setOrchestrationMode] = useState<string>("deterministic-demo");
   const [mobileNav, setMobileNav] = useState(false);
   const [newBatchOpen, setNewBatchOpen] = useState(false);
@@ -504,6 +632,7 @@ export function CashCloseApp() {
   const [scenarioOpen, setScenarioOpen] = useState(false);
   const [connectionOpen, setConnectionOpen] = useState(false);
   const [architectureOpen, setArchitectureOpen] = useState(false);
+  const [showcaseOpen, setShowcaseOpen] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [toast, setToast] = useState<ToastState | null>(null);
   const restoreAttempted = useRef(false);
@@ -512,11 +641,37 @@ export function CashCloseApp() {
     setToast({ message, kind });
   }, []);
 
+  const refreshCapabilities = useCallback(async () => {
+    setCapabilitiesRefreshing(true);
+    try {
+      const runtime = await client.getCapabilities({ timeoutMs: 3500 });
+      setCapabilities(runtime);
+      setConnection("online");
+      notify(
+        runtime.responses_mode_configured
+          ? `Agentic Responses is ready with ${runtime.responses_model}`
+          : "The running API has not loaded OPENAI_API_KEY. Set it in the project-root .env and recreate API/web.",
+        runtime.responses_mode_configured ? "success" : "info",
+      );
+    } catch (error) {
+      notify(`Could not recheck agentic capability: ${errorMessage(error)}`, "error");
+    } finally {
+      setCapabilitiesRefreshing(false);
+    }
+  }, [client, notify]);
+
   useEffect(() => {
     if (!toast) return;
     const timer = window.setTimeout(() => setToast(null), 3600);
     return () => window.clearTimeout(timer);
   }, [toast]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("showcase") !== "1") return;
+    const timer = window.setTimeout(() => setShowcaseOpen(true), 0);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   const loadBatch = useCallback(
     async (batchId: string, quiet = false) => {
@@ -550,7 +705,7 @@ export function CashCloseApp() {
         setConnection("online");
         window.localStorage.setItem("cashclose.activeBatchId", batch.batch_id);
         const savedMode = window.localStorage.getItem(`cashclose.orchestrationMode:${batch.batch_id}`);
-        if (savedMode) setOrchestrationMode(savedMode);
+        setOrchestrationMode(batch.orchestration_mode ?? savedMode ?? "deterministic-demo");
         if (!quiet) notify(`Loaded live batch ${batch.batch_id}`);
       } catch (error) {
         if (!quiet) notify(errorMessage(error), "error");
@@ -571,7 +726,8 @@ export function CashCloseApp() {
         setConnection("online");
         const runtime = await client.getCapabilities({ timeoutMs: 3500 }).catch(() => null);
         setCapabilities(runtime);
-        const batchId = window.localStorage.getItem("cashclose.activeBatchId");
+        const requestedBatchId = new URLSearchParams(window.location.search).get("batch");
+        const batchId = requestedBatchId || window.localStorage.getItem("cashclose.activeBatchId");
         if (batchId) await loadBatch(batchId, true).catch(() => undefined);
       } catch {
         setConnection("offline");
@@ -963,6 +1119,10 @@ export function CashCloseApp() {
           <Plus size={17}/><span>New close batch</span>
         </button>
 
+        <button className="showcase-launch" onClick={() => setShowcaseOpen(true)}>
+          <MonitorPlay size={17}/><span><strong>5-minute showcase</strong><small>Guided judge mode</small></span><Play size={12} fill="currentColor"/>
+        </button>
+
         <nav className="primary-nav" aria-label="CashClose sections">
           <p>Workspace</p>
           {NAVIGATION.map(({ id, label, icon: Icon }) => (
@@ -999,6 +1159,9 @@ export function CashCloseApp() {
             <p>{PAGE_META[view].subtitle}</p>
           </div>
           <div className="header-actions">
+            <button className="button secondary header-showcase" onClick={() => setShowcaseOpen(true)}>
+              <MonitorPlay size={16}/><span>Showcase</span>
+            </button>
             <button className={`connection-pill ${connection}`} onClick={() => setConnectionOpen(true)}>
               <span/><span>{connection === "checking" ? "Checking API" : connection === "online" ? "API online" : "Preview mode"}</span>
             </button>
@@ -1078,8 +1241,10 @@ export function CashCloseApp() {
         <NewBatchDialog
           connection={connection}
           capabilities={capabilities}
+          capabilitiesRefreshing={capabilitiesRefreshing}
           busy={busy === "run"}
           onClose={() => setNewBatchOpen(false)}
+          onRefreshCapabilities={refreshCapabilities}
           onDemo={(mode) => void runDemo(mode)}
           onUpload={(files, mode) => void runUploadedBatch(files, mode)}
           notify={notify}
@@ -1138,6 +1303,7 @@ export function CashCloseApp() {
           onPreview={() => {
             setWorkspace(INITIAL_WORKSPACE);
             setSource("preview");
+            setOrchestrationMode("deterministic-demo");
             window.localStorage.removeItem("cashclose.activeBatchId");
             setConnectionOpen(false);
             notify("Switched to the isolated interactive preview", "info");
@@ -1145,6 +1311,16 @@ export function CashCloseApp() {
         />
       ) : null}
       {architectureOpen ? <ArchitectureDialog onClose={() => setArchitectureOpen(false)}/> : null}
+      {showcaseOpen ? (
+        <ProductShowcase
+          workspace={workspace}
+          source={source}
+          orchestrationMode={orchestrationMode}
+          modelConfigured={capabilities?.responses_mode_configured === true}
+          responsesModel={capabilities?.responses_model ?? "gpt-5.6-terra"}
+          onClose={() => setShowcaseOpen(false)}
+        />
+      ) : null}
       {toast ? <Toast item={toast} onClose={() => setToast(null)}/> : null}
     </main>
   );
@@ -1254,6 +1430,7 @@ function CashChart({ forecast, compact = false }: { forecast: RunCashForecastRes
     risk: Number(position.risk_adjusted) / 1000,
     p10: position.p10 ? Number(position.p10) / 1000 : undefined,
     p90: position.p90 ? Number(position.p90) / 1000 : undefined,
+    p90Band: position.p10 && position.p90 ? (Number(position.p90) - Number(position.p10)) / 1000 : undefined,
   })), [forecast]);
   const values = data.flatMap((row) => [row.confirmed, row.expected, row.risk, row.p10, row.p90].filter((value): value is number => value !== undefined));
   const min = Math.min(0, ...values);
@@ -1270,7 +1447,8 @@ function CashChart({ forecast, compact = false }: { forecast: RunCashForecastRes
         <XAxis dataKey="label" axisLine={false} tickLine={false} minTickGap={compact ? 52 : 32} tick={{ fontSize: 12, fill: "#738078" }}/>
         <YAxis domain={[min - padding, max + padding]} axisLine={false} tickLine={false} width={58} tickFormatter={(value) => `${forecast.currency === "USD" ? "$" : "₹"}${Math.round(Number(value))}k`} tick={{ fontSize: 12, fill: "#738078" }}/>
         <Tooltip content={<ForecastTooltip currency={forecast.currency}/>}/>
-        <Area type="monotone" dataKey="p90" stroke="none" fill={`url(#range-${compact})`} connectNulls/>
+        <Area type="monotone" dataKey="p10" name="p10" stackId={`range-${compact}`} stroke="none" fill="transparent" connectNulls isAnimationActive={false}/>
+        <Area type="monotone" dataKey="p90Band" name="p10–p90 band" stackId={`range-${compact}`} stroke="none" fill={`url(#range-${compact})`} connectNulls isAnimationActive={false}/>
         <Area type="monotone" dataKey="risk" stroke="none" fill={`url(#risk-${compact})`}/>
         <ReferenceLine y={0} stroke="#cf684f" strokeDasharray="5 5"/>
         <Line type="monotone" dataKey="confirmed" name="Confirmed" stroke="#18392f" strokeWidth={2.5} dot={false} activeDot={{ r: 5 }}/>
@@ -1344,6 +1522,7 @@ function TraceView({
   const globalFeed = [...events].sort((a, b) => b.sequence - a.sequence).slice(0, 10);
   const agentic = orchestrationMode.startsWith("responses");
   const responsesPending = orchestrationMode === "responses-requested";
+  const planningCompleted = events.find((event) => event.event_type === "model_planning_completed");
 
   return <div className="page-stack trace-page">
     <section className="trace-context panel">
@@ -1354,6 +1533,8 @@ function TraceView({
       <div className="trace-boundary"><LockKeyhole size={17}/><span><strong>Operational trace only</strong><small>Tool inputs, evidence references, outcomes, and measured latency—never hidden reasoning.</small></span></div>
       {runState === "running" ? <span className="live-chip" role="status"><Loader2 className="spin" size={14}/> Live</span> : <span className="trace-source-chip">{source === "live" ? "Backend record" : "Preview fixture"}</span>}
     </section>
+
+    {workspace.batch.model_provenance ? <ModelPlannerCard provenance={workspace.batch.model_provenance} latencyMs={planningCompleted?.latency_ms ?? 0}/> : null}
 
     <section className="trace-workspace panel">
       <aside className="trace-records" aria-label="Transaction selector">
@@ -1425,6 +1606,20 @@ function TraceView({
       </div> : <EmptyState title="No transaction trace available" detail="Run a batch or choose a transaction with recorded processing data."/>}
     </section>
   </div>;
+}
+
+function ModelPlannerCard({ provenance, latencyMs }: { provenance: ModelOrchestrationProvenance; latencyMs: number }) {
+  const observations = provenance.tool_choices.filter((choice) => choice.outcome === "executed");
+  return <section className="planner-proof panel" aria-label="OpenAI model planning provenance">
+    <header><span><Sparkles size={18}/></span><div><p className="eyebrow">MODEL PLANNING PROVENANCE</p><strong>Two bounded Responses turns, preserved after the run</strong></div><em>{formatDuration(latencyMs)} model time</em></header>
+    <div className="planner-proof-grid">
+      <section><small>MODEL</small><strong>{provenance.model}</strong><span>Requested: {provenance.requested_model}</span></section>
+      <section><small>TURN 1 · OBSERVE</small><strong>{observations.map((choice) => choice.tool_name).join(" · ")}</strong><code>{provenance.response_ids[0]}</code></section>
+      <section><small>TURN 2 · STRATEGY</small><strong>{titleCase(provenance.strategy.record_order)} · {titleCase(provenance.strategy.candidate_search)}</strong><code>{provenance.response_ids[1]}</code></section>
+      <section><small>FORECAST CHOICE</small><strong>{titleCase(provenance.strategy.forecast_method)}</strong><span>{provenance.strategy.forecast_method === "monte_carlo" ? `${provenance.strategy.monte_carlo_simulations} seeded simulations` : "Calculated daily path"}</span></section>
+    </div>
+    <footer><LockKeyhole size={15}/><span>These IDs and tool choices prove model orchestration. Matching, verification, writes, and money calculations were still executed by deterministic tools.</span></footer>
+  </section>;
 }
 
 function traceRecordTone(detail: RecordDetailView): "safe" | "risk" | "review" {
@@ -1593,6 +1788,7 @@ function ExceptionDetail({ item, onResolve, onReview, busy }: { item: ExceptionR
 
 function ForecastView({ forecast, onScenario, onReset, busy, notify }: { forecast: RunCashForecastResult; onScenario: () => void; onReset: () => void; busy: string | null; notify: (message: string, kind?: ToastState["kind"]) => void }) {
   const scenarioActive = forecast.scenario.action_type && forecast.scenario.action_type !== "base";
+  const hasSimulationRange = forecast.positions.some((position) => position.p10 && position.p90);
   const exportCsv = () => {
     const header = "date,confirmed,expected,risk_adjusted,p10,p50,p90";
     const rows = forecast.positions.map((item) => [item.date, item.confirmed, item.expected, item.risk_adjusted, item.p10 ?? "", item.p50 ?? "", item.p90 ?? ""].join(","));
@@ -1604,7 +1800,7 @@ function ForecastView({ forecast, onScenario, onReset, busy, notify }: { forecas
     <section className="forecast-metric-grid">
       <article className="forecast-low"><p className="eyebrow">EXPECTED CASH MINIMUM</p><strong>{formatMoney(forecast.minimum_expected_cash, forecast.currency)}</strong><span>{formatDate(forecast.minimum_expected_cash_date, { year: "numeric" })}</span><div className={forecast.shortfall_date ? "danger" : "safe"}>{forecast.shortfall_date ? <AlertTriangle size={16}/> : <CheckCircle2 size={16}/>} {forecast.shortfall_date ? `Shortfall from ${formatDate(forecast.shortfall_date)}` : "Above zero throughout"}</div></article>
       <article><span>Forecast horizon</span><strong>{forecast.horizon_days} days</strong><small>{formatDate(forecast.as_of_date)} to {formatDate(forecast.positions.at(-1)?.date ?? forecast.as_of_date)}</small></article>
-      <article><span>Simulation range</span><strong>P10–P90</strong><small>Calculated confidence band</small></article>
+      <article><span>{hasSimulationRange ? "Simulation range" : "Forecast method"}</span><strong>{hasSimulationRange ? "P10–P90" : "Deterministic"}</strong><small>{hasSimulationRange ? "Calculated Monte Carlo band" : "No probability band generated"}</small></article>
       <article><span>Opening basis</span><strong>Verified cash</strong><small>Committed records only</small></article>
     </section>
     <section className="panel forecast-panel">
@@ -1680,7 +1876,7 @@ function ExceptionQuickPanel({ item, busy, onClose, onResolve, onReview }: { ite
   return <Overlay onClose={onClose} side><article className="side-panel"><DrawerHeader icon={<AlertTriangle size={20}/>} eyebrow={item.exception_id} title={titleCase(item.reason_code)} subtitle={item.record_id} onClose={onClose}/><div className="quick-exception"><p>{DEMO_EXCEPTION_META[item.exception_id]?.explanation ?? "The controller could not establish enough safe evidence to commit this record."}</p><section className="next-action"><WandSparkles size={19}/><div><small>NEXT ACTION</small><strong>{item.next_action}</strong></div></section><h3>Evidence</h3><div className="evidence-list">{item.evidence.map((evidence) => <div key={evidence.evidence_id}><span><Link2 size={15}/></span><p><strong>{titleCase(evidence.evidence_type)}</strong><small>{evidence.summary}</small></p></div>)}</div><label className="field-label">Resolution<textarea value={resolution} onChange={(event) => setResolution(event.target.value)} placeholder="Add supporting evidence and treatment…"/></label></div><footer className="drawer-footer"><button className="button secondary" disabled={item.status === "IN_REVIEW" || busy === `review:${item.exception_id}`} onClick={() => void onReview(item)}><UserCheck size={16}/> Request review</button><button className="button primary" disabled={!resolution.trim() || busy === `resolve:${item.exception_id}`} onClick={() => void onResolve(item, resolution)}><Check size={16}/> Resolve</button></footer></article></Overlay>;
 }
 
-function NewBatchDialog({ connection, capabilities, busy, onClose, onDemo, onUpload, notify }: { connection: Connection; capabilities: RuntimeCapabilitiesView | null; busy: boolean; onClose: () => void; onDemo: (mode: ExecutionMode) => void; onUpload: (files: Record<FileKind, UploadState>, mode: ExecutionMode) => void; notify: (message: string, kind?: ToastState["kind"]) => void }) {
+function NewBatchDialog({ connection, capabilities, capabilitiesRefreshing, busy, onClose, onRefreshCapabilities, onDemo, onUpload, notify }: { connection: Connection; capabilities: RuntimeCapabilitiesView | null; capabilitiesRefreshing: boolean; busy: boolean; onClose: () => void; onRefreshCapabilities: () => Promise<void>; onDemo: (mode: ExecutionMode) => void; onUpload: (files: Record<FileKind, UploadState>, mode: ExecutionMode) => void; notify: (message: string, kind?: ToastState["kind"]) => void }) {
   const [tab, setTab] = useState<"demo" | "upload">("demo");
   const [files, setFiles] = useState<Partial<Record<FileKind, UploadState>>>({});
   const agenticAvailable = capabilities?.responses_mode_configured === true;
@@ -1710,14 +1906,14 @@ function NewBatchDialog({ connection, capabilities, busy, onClose, onDemo, onUpl
       <section className="execution-mode-section" aria-labelledby="execution-mode-title">
         <div><p className="eyebrow">EXECUTION MODE</p><h3 id="execution-mode-title">Choose how the controller plans</h3></div>
         <div className="execution-mode-options" role="radiogroup" aria-label="Controller execution mode">
-          {agenticAvailable ? <button role="radio" aria-checked={selectedExecutionMode === "agentic"} className={selectedExecutionMode === "agentic" ? "active" : ""} onClick={() => setExecutionMode("agentic")}>
-            <span><Sparkles size={19}/></span><span><strong>Agentic Responses</strong><small>{capabilities?.responses_model} chooses investigations and tools; deterministic code still owns every financial action.</small></span><i>{selectedExecutionMode === "agentic" ? <Check size={13}/> : null}</i>
-          </button> : null}
+          <button role="radio" aria-checked={selectedExecutionMode === "agentic"} aria-disabled={!agenticAvailable} disabled={!agenticAvailable || busy} className={selectedExecutionMode === "agentic" ? "active" : ""} onClick={() => setExecutionMode("agentic")}>
+            <span><Sparkles size={19}/></span><span><strong>Agentic Responses</strong><small>{agenticAvailable ? `${capabilities?.responses_model} chooses investigations and tools; deterministic code still owns every financial action.` : "Unavailable until OPENAI_API_KEY is loaded by the running API."}</small></span><i>{selectedExecutionMode === "agentic" ? <Check size={13}/> : <LockKeyhole size={12}/>}</i>
+          </button>
           <button role="radio" aria-checked={selectedExecutionMode === "deterministic"} className={selectedExecutionMode === "deterministic" ? "active" : ""} onClick={() => setExecutionMode("deterministic")}>
             <span><Database size={19}/></span><span><strong>Deterministic demo</strong><small>Rule-driven orchestration with no model calls. Matching, money, writes, and metrics remain deterministic.</small></span><i>{selectedExecutionMode === "deterministic" ? <Check size={13}/> : null}</i>
           </button>
         </div>
-        {!agenticAvailable ? <p className="capability-note"><LockKeyhole size={15}/><span>Agentic Responses is not configured by this backend. This run will use the deterministic controller and will not be labeled as a model run.</span></p> : null}
+        {!agenticAvailable ? <div className="capability-note"><LockKeyhole size={15}/><span><strong>OPENAI_API_KEY is not loaded by this API.</strong> Set it in the project-root <code>.env</code>, recreate API/web, then Recheck. Recheck only queries the running API.</span><button type="button" className="text-button" disabled={capabilitiesRefreshing} onClick={() => void onRefreshCapabilities()}>{capabilitiesRefreshing ? <Loader2 className="spin" size={13}/> : <RefreshCw size={13}/>} {capabilitiesRefreshing ? "Checking…" : "Recheck"}</button></div> : null}
       </section>
       {tab === "demo" ? <div className="demo-launch">
         <div className="demo-hero"><span><Database size={25}/></span><div><p className="eyebrow">FIXED SEED · REPRODUCIBLE</p><h3>290 financial records with planted edge cases</h3><p>Exact matches, aliases, partial and combined payments, fees, duplicates, currency conflicts, ambiguity, and unreconcilable cash.</p></div></div>
@@ -1782,7 +1978,470 @@ function ScenarioPanel({ currency, busy, onClose, onRun }: { currency: string; b
 }
 
 function ConnectionDialog({ connection, source, apiUrl, batchId, onClose, onRun, onPreview }: { connection: Connection; source: Source; apiUrl: string; batchId: string; onClose: () => void; onRun: () => void; onPreview: () => void }) {
-  return <Overlay onClose={onClose}><article className="modal connection-modal"><DrawerHeader icon={<Server size={20}/>} eyebrow="RUNTIME CONNECTION" title="Workspace status" subtitle="Know exactly which data you are viewing." onClose={onClose}/><div className="connection-body"><section className={`connection-card ${connection}`}><span><Server size={22}/></span><div><small>FASTAPI CONTROLLER</small><strong>{connection === "online" ? "Online and ready" : connection === "checking" ? "Checking connection" : "Not reachable"}</strong><code>{apiUrl}</code></div></section><section className="connection-facts"><div><span>Current source</span><strong>{source === "live" ? "Live backend records" : "Isolated preview fixture"}</strong></div><div><span>Active batch</span><strong>{batchId}</strong></div><div><span>Persistence</span><strong>{source === "live" ? "API / PostgreSQL boundary" : "In-memory browser session"}</strong></div></section><p className="connection-note"><LockKeyhole size={17}/><span>The browser stores only the active batch pointer. Financial records and decisions stay behind validated API tools.</span></p></div><footer className="modal-footer"><button className="button secondary" onClick={onPreview}>Use preview</button><button className="button primary" disabled={connection !== "online"} onClick={onRun}><Play size={16}/> Run live demo</button></footer></article></Overlay>;
+  return <Overlay onClose={onClose}><article className="modal connection-modal"><DrawerHeader icon={<Server size={20}/>} eyebrow="RUNTIME CONNECTION" title="Workspace status" subtitle="Know exactly which data you are viewing." onClose={onClose}/><div className="connection-body"><section className={`connection-card ${connection}`}><span><Server size={22}/></span><div><small>FASTAPI CONTROLLER</small><strong>{connection === "online" ? "Online and ready" : connection === "checking" ? "Checking connection" : "Not reachable"}</strong><code>{apiUrl}</code></div></section><section className="connection-facts"><div><span>Current source</span><strong>{source === "live" ? "Live backend records" : "Isolated preview fixture"}</strong></div><div><span>Active batch</span><strong>{batchId}</strong></div><div><span>Persistence</span><strong>{source === "live" ? "In-memory API state (demo)" : "In-memory browser session"}</strong></div></section><p className="connection-note"><LockKeyhole size={17}/><span>The browser stores only the active batch pointer. Demo records live in API process memory behind validated tools; PostgreSQL is the production persistence target.</span></p></div><footer className="modal-footer"><button className="button secondary" onClick={onPreview}>Use preview</button><button className="button primary" disabled={connection !== "online"} onClick={onRun}><Play size={16}/> Run live demo</button></footer></article></Overlay>;
+}
+
+function formatShowcaseTime(milliseconds: number): string {
+  const seconds = Math.max(0, Math.ceil(milliseconds / 1000));
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+}
+
+function streamCleanup(stream: MediaStream | null): void {
+  stream?.getTracks().forEach((track) => track.stop());
+}
+
+function sceneStartMilliseconds(index: number): number {
+  return SHOWCASE_SCENES.slice(0, index).reduce(
+    (total, scene) => total + scene.durationSeconds * 1000,
+    0,
+  );
+}
+
+function ProductShowcase({
+  workspace,
+  source,
+  orchestrationMode,
+  modelConfigured,
+  responsesModel,
+  onClose,
+}: {
+  workspace: WorkspaceData;
+  source: Source;
+  orchestrationMode: string;
+  modelConfigured: boolean;
+  responsesModel: string;
+  onClose: () => void;
+}) {
+  const totalMilliseconds = SHOWCASE_TOTAL_SECONDS * 1000;
+  const [elapsedMilliseconds, setElapsedMilliseconds] = useState(0);
+  const [playing, setPlaying] = useState(() => typeof window !== "undefined" && !window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+  const [timelineRevision, setTimelineRevision] = useState(0);
+  const [narrationEnabled, setNarrationEnabled] = useState(false);
+  const [narrationSupported] = useState(() => typeof window !== "undefined" && "speechSynthesis" in window);
+  const [narrationRevision, setNarrationRevision] = useState(0);
+  const [recording, setRecording] = useState(false);
+  const [recordingStarting, setRecordingStarting] = useState(false);
+  const [recordingElapsedMilliseconds, setRecordingElapsedMilliseconds] = useState(0);
+  const [recordingError, setRecordingError] = useState<string | null>(null);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const recordingStreamRef = useRef<MediaStream | null>(null);
+  const recordingStartedAtRef = useRef<number | null>(null);
+  const recordingStopTimerRef = useRef<number | null>(null);
+  const recordingShouldDownloadRef = useRef(false);
+  const captureAttemptRef = useRef(0);
+  const mountedRef = useRef(false);
+  const elapsedRef = useRef(0);
+  const chapterRefs = useRef<Array<HTMLButtonElement | null>>([]);
+
+  const stopShowcaseRecording = useCallback(() => {
+    if (recordingStopTimerRef.current !== null) {
+      window.clearTimeout(recordingStopTimerRef.current);
+      recordingStopTimerRef.current = null;
+    }
+    const recorder = recorderRef.current;
+    if (recorder && recorder.state !== "inactive") recorder.stop();
+    else {
+      streamCleanup(recordingStreamRef.current);
+      recordingStreamRef.current = null;
+    }
+    recordingStartedAtRef.current = null;
+    setRecording(false);
+  }, []);
+
+  const startShowcaseRecording = async () => {
+    if (recording || recordingStarting || recorderRef.current) return;
+    setRecordingError(null);
+    if (!navigator.mediaDevices?.getDisplayMedia || typeof MediaRecorder === "undefined") {
+      setRecordingError("This browser cannot capture a tab. Use current Chrome or Edge.");
+      return;
+    }
+    const attempt = captureAttemptRef.current + 1;
+    captureAttemptRef.current = attempt;
+    setRecordingStarting(true);
+    let captureStream: MediaStream | null = null;
+    try {
+      captureStream = await navigator.mediaDevices.getDisplayMedia({
+        video: { frameRate: { ideal: 30, max: 30 } },
+        audio: true,
+      });
+      if (!mountedRef.current || captureAttemptRef.current !== attempt) {
+        streamCleanup(captureStream);
+        return;
+      }
+      const preferredType = ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm"].find((type) => MediaRecorder.isTypeSupported(type));
+      const recorderOptions: MediaRecorderOptions = { bitsPerSecond: 3_000_000 };
+      if (preferredType) recorderOptions.mimeType = preferredType;
+      const recorder = new MediaRecorder(captureStream, recorderOptions);
+      const chunks: BlobPart[] = [];
+      recorderRef.current = recorder;
+      recordingStreamRef.current = captureStream;
+      recordingShouldDownloadRef.current = true;
+      recorder.ondataavailable = (event) => { if (event.data.size) chunks.push(event.data); };
+      recorder.onstop = () => {
+        if (recordingStopTimerRef.current !== null) {
+          window.clearTimeout(recordingStopTimerRef.current);
+          recordingStopTimerRef.current = null;
+        }
+        const blob = new Blob(chunks, { type: recorder.mimeType || "video/webm" });
+        const extension = recorder.mimeType.includes("mp4") ? "mp4" : "webm";
+        if (recordingShouldDownloadRef.current && blob.size) downloadBlob(blob, `cashclose-ai-five-minute-showcase-${new Date().toISOString().slice(0, 10)}.${extension}`);
+        streamCleanup(captureStream);
+        recorderRef.current = null;
+        recordingStreamRef.current = null;
+        recordingStartedAtRef.current = null;
+        recordingShouldDownloadRef.current = false;
+        if (mountedRef.current) {
+          setRecording(false);
+          setRecordingStarting(false);
+        }
+      };
+      recorder.onerror = () => {
+        recordingShouldDownloadRef.current = false;
+        if (mountedRef.current) setRecordingError("The browser encoder stopped unexpectedly. No incomplete recording was downloaded.");
+        if (recorder.state !== "inactive") recorder.stop();
+      };
+      captureStream.getVideoTracks()[0]?.addEventListener("ended", () => {
+        if (recorder.state === "recording") recorder.stop();
+      }, { once: true });
+      recorder.start(1000);
+      const startedAt = Date.now();
+      recordingStartedAtRef.current = startedAt;
+      recordingStopTimerRef.current = window.setTimeout(stopShowcaseRecording, totalMilliseconds);
+      elapsedRef.current = 0;
+      setElapsedMilliseconds(0);
+      setRecordingElapsedMilliseconds(0);
+      setPlaying(true);
+      setTimelineRevision((current) => current + 1);
+      setNarrationRevision((current) => current + 1);
+      setRecording(true);
+      setRecordingStarting(false);
+    } catch (error) {
+      if (mountedRef.current) {
+        setRecordingError(error instanceof Error && error.name !== "NotAllowedError" ? error.message : "Capture was cancelled. Choose the CashClose tab when you are ready.");
+        setRecordingStarting(false);
+      }
+      streamCleanup(captureStream);
+    }
+  };
+
+  const sceneIndex = Math.min(
+    SHOWCASE_SCENES.length - 1,
+    SHOWCASE_SCENES.findIndex((_, index) => elapsedMilliseconds < sceneStartMilliseconds(index + 1)),
+  );
+  const safeSceneIndex = sceneIndex < 0 ? SHOWCASE_SCENES.length - 1 : sceneIndex;
+  const scene = SHOWCASE_SCENES[safeSceneIndex];
+  const sceneElapsed = elapsedMilliseconds - sceneStartMilliseconds(safeSceneIndex);
+  const sceneProgress = Math.min(100, (sceneElapsed / (scene.durationSeconds * 1000)) * 100);
+  const totalProgress = Math.min(100, (elapsedMilliseconds / totalMilliseconds) * 100);
+
+  useEffect(() => {
+    chapterRefs.current[safeSceneIndex]?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [safeSceneIndex]);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      captureAttemptRef.current += 1;
+      recordingShouldDownloadRef.current = false;
+      if (recordingStopTimerRef.current !== null) window.clearTimeout(recordingStopTimerRef.current);
+      const recorder = recorderRef.current;
+      if (recorder && recorder.state !== "inactive") recorder.stop();
+      streamCleanup(recordingStreamRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    elapsedRef.current = elapsedMilliseconds;
+  }, [elapsedMilliseconds]);
+
+  useEffect(() => {
+    if (!playing || recording) return;
+    const playbackStartedAt = performance.now() - elapsedRef.current;
+    const interval = window.setInterval(() => {
+      const next = Math.min(totalMilliseconds, performance.now() - playbackStartedAt);
+      elapsedRef.current = next;
+      setElapsedMilliseconds(next);
+      if (next >= totalMilliseconds) setPlaying(false);
+    }, 250);
+    return () => window.clearInterval(interval);
+  }, [playing, recording, timelineRevision, totalMilliseconds]);
+
+  useEffect(() => {
+    if (!recording || recordingStartedAtRef.current === null) return;
+    const updateRecordingClock = () => {
+      if (recordingStartedAtRef.current === null) return;
+      const next = Math.min(totalMilliseconds, Date.now() - recordingStartedAtRef.current);
+      elapsedRef.current = next;
+      setRecordingElapsedMilliseconds(next);
+      setElapsedMilliseconds(next);
+      if (next >= totalMilliseconds) stopShowcaseRecording();
+    };
+    updateRecordingClock();
+    const interval = window.setInterval(updateRecordingClock, 200);
+    return () => window.clearInterval(interval);
+  }, [recording, stopShowcaseRecording, totalMilliseconds]);
+
+  useEffect(() => {
+    if (!narrationEnabled || !playing || !("speechSynthesis" in window)) return;
+    const utterance = new SpeechSynthesisUtterance(`${scene.title}. ${scene.narration}`);
+    utterance.rate = 0.92;
+    utterance.pitch = 0.98;
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(utterance);
+    return () => window.speechSynthesis.cancel();
+  }, [narrationEnabled, narrationRevision, playing, scene]);
+
+  const seekToScene = (index: number) => {
+    if (recording) return;
+    const nextIndex = Math.max(0, Math.min(SHOWCASE_SCENES.length - 1, index));
+    const nextElapsed = sceneStartMilliseconds(nextIndex);
+    elapsedRef.current = nextElapsed;
+    setElapsedMilliseconds(nextElapsed);
+    setTimelineRevision((current) => current + 1);
+    setNarrationRevision((current) => current + 1);
+  };
+
+  const restartShowcase = () => {
+    if (recording) return;
+    elapsedRef.current = 0;
+    setElapsedMilliseconds(0);
+    setPlaying(true);
+    setTimelineRevision((current) => current + 1);
+    setNarrationRevision((current) => current + 1);
+  };
+
+  const togglePlayback = () => {
+    if (recording) return;
+    if (elapsedMilliseconds >= totalMilliseconds) {
+      restartShowcase();
+      return;
+    }
+    setPlaying((current) => !current);
+    setTimelineRevision((current) => current + 1);
+  };
+
+  const closeShowcase = () => {
+    if (recording || recordingStarting) {
+      setRecordingError("Stop the recording before exiting the showcase.");
+      return;
+    }
+    if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+    onClose();
+  };
+
+  return (
+    <Overlay onClose={closeShowcase} immersive>
+      <article className="showcase" role="dialog" aria-modal="true" aria-label="Five-minute CashClose product showcase" data-showcase-scene={scene.id}>
+        <header className="showcase-header">
+          <button className="showcase-brand" onClick={restartShowcase} aria-label="Restart showcase" disabled={recording || recordingStarting}>
+            <span>C</span><strong>cashclose</strong><small>PRODUCT SHOWCASE</small>
+          </button>
+          <div className="showcase-runtime">
+            <span className={`status-dot ${source === "live" ? "success" : "working"}`}/>
+            <span><strong>{source === "live" ? "Live controller data" : "Curated truth-set preview"}</strong><small>{workspace.batch.model_provenance ? "Responses-guided run proven" : orchestrationMode === "responses-requested" ? "Responses planning requested" : "Safe deterministic run"}</small></span>
+          </div>
+          <div className={`showcase-clock ${recording ? "recording" : ""}`}>{recording ? <span className="recording-dot"/> : <TimerReset size={16}/>}<span><strong>{recording ? `REC ${formatShowcaseTime(recordingElapsedMilliseconds)}` : formatShowcaseTime(totalMilliseconds - elapsedMilliseconds)}</strong><small>{recording ? "wall-clock capture" : "of 5:00 remaining"}</small></span></div>
+          <button className="icon-button" onClick={closeShowcase} aria-label="Exit showcase" disabled={recording || recordingStarting}><X size={20}/></button>
+        </header>
+
+        <div className="showcase-master-progress" role="progressbar" aria-label="Showcase progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(totalProgress)}><i style={{ width: `${totalProgress}%` }}/></div>
+
+        <div className="showcase-layout">
+          <nav className="showcase-chapters" aria-label="Showcase chapters">
+            <p>Five-minute story</p>
+            {SHOWCASE_SCENES.map((item, index) => {
+              const Icon = item.icon;
+              const complete = elapsedMilliseconds >= sceneStartMilliseconds(index + 1);
+              return (
+                <button ref={(element) => { chapterRefs.current[index] = element; }} key={item.id} className={index === safeSceneIndex ? "active" : complete ? "complete" : ""} onClick={() => seekToScene(index)} aria-current={index === safeSceneIndex ? "step" : undefined} disabled={recording}>
+                  <span><Icon size={15}/></span>
+                  <span><strong>{item.label}</strong><small>{item.durationSeconds}s</small></span>
+                  {complete ? <Check size={13}/> : <em>{String(index + 1).padStart(2, "0")}</em>}
+                </button>
+              );
+            })}
+          </nav>
+
+          <section className="showcase-stage">
+            <span className="sr-only" aria-live="polite">Chapter {safeSceneIndex + 1}: {scene.title}</span>
+            <header>
+              <div>
+                <p className="eyebrow">{scene.eyebrow}</p>
+                <h2>{scene.title}</h2>
+              </div>
+              <span>CHAPTER {safeSceneIndex + 1} / {SHOWCASE_SCENES.length}</span>
+            </header>
+            <ShowcaseVisual
+              scene={scene.id}
+              workspace={workspace}
+              source={source}
+              orchestrationMode={orchestrationMode}
+              modelConfigured={modelConfigured}
+              responsesModel={responsesModel}
+            />
+            <footer className="showcase-caption">
+              <span><Volume2 size={17}/></span>
+              <p><strong>Presenter track</strong>{scene.narration}</p>
+            </footer>
+          </section>
+        </div>
+
+        <footer className="showcase-controls">
+          <div className="showcase-scene-progress" role="progressbar" aria-label="Chapter progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(sceneProgress)}><i style={{ width: `${sceneProgress}%` }}/></div>
+          <button className="button secondary showcase-chapter-control" onClick={() => seekToScene(safeSceneIndex - 1)} disabled={recording || safeSceneIndex === 0}><ChevronLeft size={16}/> Previous</button>
+          <button className="showcase-play" onClick={togglePlayback} aria-label={elapsedMilliseconds >= totalMilliseconds ? "Replay showcase" : playing ? "Pause showcase" : "Play showcase"} disabled={recording}>{playing ? <Pause size={19}/> : <Play size={19} fill="currentColor"/>}</button>
+          <button className="button secondary showcase-chapter-control" onClick={() => seekToScene(safeSceneIndex + 1)} disabled={recording || safeSceneIndex === SHOWCASE_SCENES.length - 1}>Next <ChevronRight size={16}/></button>
+          <button className={`button secondary narration-toggle ${narrationEnabled ? "active" : ""}`} onClick={() => setNarrationEnabled((current) => !current)} aria-pressed={narrationEnabled} disabled={!narrationSupported}>{narrationEnabled ? <Volume2 size={16}/> : <VolumeX size={16}/>} Narration</button>
+          <button className={`button secondary recording-toggle ${recording ? "active" : ""}`} onClick={() => recording ? stopShowcaseRecording() : void startShowcaseRecording()} disabled={recordingStarting} aria-pressed={recording}>{recording ? <Square size={14} fill="currentColor"/> : recordingStarting ? <Loader2 className="spin" size={16}/> : <Video size={16}/>} {recording ? "Stop & download" : recordingStarting ? "Choose tab…" : "Record 5:00"}</button>
+          <button className="button primary" onClick={closeShowcase} disabled={recording || recordingStarting}>Exit showcase</button>
+          {recordingError ? <p className="showcase-recording-error" role="alert">{recordingError}</p> : null}
+        </footer>
+      </article>
+    </Overlay>
+  );
+}
+
+function ShowcaseVisual({
+  scene,
+  workspace,
+  source,
+  orchestrationMode,
+  modelConfigured,
+  responsesModel,
+}: {
+  scene: ShowcaseSceneId;
+  workspace: WorkspaceData;
+  source: Source;
+  orchestrationMode: string;
+  modelConfigured: boolean;
+  responsesModel: string;
+}) {
+  const combined = workspace.matches.proposals.find((proposal) => proposal.allocations.length > 1) ?? workspace.matches.proposals[0];
+  const exception = workspace.exceptions.find((item) => item.reason_code === "AMBIGUOUS_MATCH") ?? workspace.exceptions[0];
+  const featuredDetail = combined ? workspace.records.find((item) => item.record.record_id === combined.transaction_id) : undefined;
+  const eventSamples = featuredDetail
+    ? (source === "preview" ? previewEventsForRecord(featuredDetail) : eventsForRecord(workspace.events, featuredDetail)).filter((event) => event.tool_name).slice(0, 5)
+    : [];
+  const matching = workspace.metrics.matching;
+  const provenance = workspace.batch.model_provenance;
+  const allocationDeduction = combined?.permitted_deduction ?? money("0");
+  const allocationBalances = combined
+    ? moneyToMinorUnits(addMoney(combined.total_allocated, allocationDeduction)) === moneyToMinorUnits(combined.transaction_amount)
+    : false;
+  const allocationStatus = allocationBalances
+    ? moneyToMinorUnits(allocationDeduction) === BigInt(0) ? "EXACT" : "BALANCED + DEDUCTION"
+    : "POLICY CHECKED";
+
+  if (scene === "opening") {
+    return <div className="showcase-opening">
+      <div className="showcase-hero-mark"><span>C</span><i/></div>
+      <div className="showcase-hero-copy"><p>AGENTIC RECONCILIATION CONTROLLER</p><h3>Reconcile. Forecast.<br/><em>Explain every exception.</em></h3><span><ShieldCheck size={18}/> Financial actions remain deterministic and auditable.</span></div>
+      <div className="showcase-kpis"><span><small>VALUE RECONCILED</small><strong>{compactMoney(matching.value_reconciled, matching.currency)}</strong></span><span><small>PRECISION</small><strong>{confidencePercent(matching.precision)}</strong></span><span><small>30-DAY LOW</small><strong>{compactMoney(workspace.metrics.forecast_cash_minimum, matching.currency)}</strong></span></div>
+    </div>;
+  }
+
+  if (scene === "problem") {
+    return <div className="showcase-problem">
+      <div className="showcase-problem-card"><Banknote size={23}/><span><small>FRAGMENTED INPUTS</small><strong>Bank, invoices, ledger, remittance</strong><p>References disagree and payments rarely map one-to-one.</p></span></div>
+      <div className="showcase-problem-card"><AlertTriangle size={23}/><span><small>UNSAFE AUTOMATION</small><strong>{compactMoney(matching.unresolved_value, matching.currency)} needs explanation</strong><p>Amount-only matches and contradictions cannot be silently approved.</p></span></div>
+      <div className="showcase-problem-card"><Activity size={23}/><span><small>FORECAST RISK</small><strong>Unverified cash poisons the outlook</strong><p>The opening position must be established before scenarios mean anything.</p></span></div>
+      <div className="showcase-rule"><LockKeyhole size={24}/><p><strong>The governing rule</strong>The AI decides what to investigate and which approved tools to use. Deterministic code performs money calculations, constraints, writes, and metrics.</p></div>
+    </div>;
+  }
+
+  if (scene === "architecture") {
+    return <div className="showcase-architecture">
+      <div className="showcase-architecture-path">
+        <section><FileSpreadsheet size={21}/><span><small>INPUT</small><strong>Validated CSV truth layer</strong></span></section><i><ArrowRight size={16}/></i>
+        <section className="agent"><Bot size={21}/><span><small>CONTROL PLANE</small><strong>One bounded controller</strong></span></section><i><ArrowRight size={16}/></i>
+        <section><ShieldCheck size={21}/><span><small>AUTHORITY</small><strong>Deterministic finance core</strong></span></section><i><ArrowRight size={16}/></i>
+        <section><LayoutDashboard size={21}/><span><small>OUTPUT</small><strong>Evidence, forecast, audit</strong></span></section>
+      </div>
+      <div className="showcase-specialists"><section><ArrowLeftRight size={20}/><strong>Reconciliation specialist</strong><small>Normalization, candidates, allocation, evidence</small></section><section><ShieldCheck size={20}/><strong>Verification specialist</strong><small>Thresholds, contradictions, policy approval</small></section><section><Activity size={20}/><strong>Forecast specialist</strong><small>Verified cash, scenarios, movement explanation</small></section></div>
+      <div className="showcase-runtime-boundary"><div><span>RUNNING DEMO</span><strong>React 19 / Vinext UI → FastAPI → in-memory batch state</strong><small>Docker also starts PostgreSQL and Redis, but this hackathon service has not wired them as persistence or job execution yet.</small></div><div><span>PRODUCTION TARGET</span><strong>Supabase Postgres + Storage · Redis/RQ worker</strong><small>The API and validated tool contracts are the seam for that deployment step.</small></div></div>
+    </div>;
+  }
+
+  if (scene === "truth") {
+    const activeBankRows = workspace.records.filter((item) => item.record.record_type === "bank_transaction").length;
+    const validatedSource = source === "preview" ? "Fixed-seed fixture" : "Validated CSV input";
+    const inputs = [
+      ["Bank transactions", activeBankRows ? `${activeBankRows} active rows` : validatedSource, Banknote],
+      ["Invoices", validatedSource, FileSpreadsheet],
+      ["Ledger entries", validatedSource, Database],
+      ["Remittances", validatedSource, FileCheck2],
+    ] as const;
+    return <div className="showcase-truth">
+      <div className="showcase-file-grid">{inputs.map(([label, count, Icon]) => <section key={label}><span><Icon size={22}/></span><div><small>CSV SOURCE</small><strong>{label}</strong><p>{count} · schema checked</p></div><CheckCircle2 size={18}/></section>)}</div>
+      <div className="showcase-validation-flow"><span><strong>01</strong> Pydantic schema</span><i/><span><strong>02</strong> Currency + Decimal</span><i/><span><strong>03</strong> Referential integrity</span><i/><span><strong>04</strong> Batch accepted</span></div>
+      <p className="showcase-disclosure"><LockKeyhole size={17}/><span><strong>Ground-truth isolation:</strong> expected matches, exceptions, and future actual cash are evaluator-only artifacts and never enter the controller context.</span></p>
+    </div>;
+  }
+
+  if (scene === "planning") {
+    const responsesActive = Boolean(provenance);
+    const responsesPending = !provenance && orchestrationMode === "responses-requested";
+    const observationTools = provenance?.tool_choices.filter((choice) => choice.outcome === "executed").map((choice) => choice.tool_name) ?? [];
+    const strategy = provenance?.strategy;
+    return <div className="showcase-planning">
+      <div className="showcase-model-status"><span><Sparkles size={22}/></span><div><small>OPENAI RESPONSES MODE · {provenance?.model ?? responsesModel}</small><strong>{responsesActive ? "Completed for this batch" : responsesPending ? "Planning is in progress" : modelConfigured ? "Ready for the next batch" : "Optional mode—not configured in this runtime"}</strong><p>The model may choose investigation and strategy only.</p></div><em>{responsesActive ? "PROVEN" : responsesPending ? "PLANNING" : modelConfigured ? "READY" : "DEMO PATH"}</em></div>
+      <div className="showcase-turns">
+        <section><span>TURN 1</span><strong>Observe and select tools</strong><p>Choose 1–3 distinct read-only calls.</p>{observationTools.length ? <div>{observationTools.map((tool) => <code key={tool}>{tool}</code>)}</div> : <small className="showcase-awaiting">{responsesPending ? "Waiting for the model selection…" : "No model selection recorded for this batch."}</small>}{provenance ? <small className="showcase-response-ref">response · {provenance.response_ids[0]}</small> : null}</section>
+        <i><ArrowRight size={18}/><small>structured outputs returned</small></i>
+        <section><span>TURN 2</span><strong>Select bounded strategy</strong><p>Set record order, candidate breadth, and deterministic or Monte Carlo forecast.</p>{strategy ? <div><code>{strategy.record_order}</code><code>{strategy.candidate_search}</code><code>{strategy.forecast_method}</code></div> : <small className="showcase-awaiting">Strategy appears only after a successful second turn.</small>}{provenance ? <small className="showcase-response-ref">response · {provenance.response_ids[1]}</small> : null}</section>
+      </div>
+      <div className="showcase-denied-actions"><LockKeyhole size={18}/><span><strong>The model cannot:</strong> execute SQL · calculate totals · commit matches · edit invoices · see private ground truth.</span></div>
+    </div>;
+  }
+
+  if (scene === "reconciliation" && combined) {
+    return <div className="showcase-reconciliation">
+      <div className="showcase-transaction"><span><Banknote size={24}/></span><div><small>BANK TRANSACTION · {combined.transaction_id}</small><strong>{formatMoney(combined.transaction_amount, combined.currency)}</strong><code>{workspace.records.find((item) => item.record.record_id === combined.transaction_id)?.record.reference ?? "Combined remittance reference"}</code></div><em>{confidencePercent(combined.confidence)} confidence</em></div>
+      <div className="showcase-gates">{TRACE_STAGES.map((stage, index) => <section key={stage.id}><span>{index + 1}</span><strong>{stage.label}</strong><small>{stage.defaultTool}</small>{index < TRACE_STAGES.length - 1 ? <i/> : null}</section>)}</div>
+      <div className="showcase-allocation"><div><small>DETERMINISTIC ALLOCATION</small><strong>{combined.allocations.length} invoices solved</strong></div>{combined.allocations.map((allocation) => <span key={allocation.invoice_id}><code>{allocation.invoice_id}</code><strong>{formatMoney(allocation.amount, allocation.currency)}</strong><Check size={14}/></span>)}<footer><span>Total allocated</span><strong>{formatMoney(combined.total_allocated, combined.currency)}</strong><em>{allocationStatus}</em></footer></div>
+      <div className="showcase-event-strip">{eventSamples.map((event) => <span key={event.sequence}><i/><strong>{event.tool_name}</strong><small>{formatDuration(event.latency_ms)}</small></span>)}</div>
+    </div>;
+  }
+
+  if (scene === "exception" && exception) {
+    return <div className="showcase-exception">
+      <section className="showcase-exception-record"><div><span><AlertTriangle size={22}/></span><p><small>{exception.exception_id} · {exception.record_id}</small><strong>{titleCase(exception.reason_code)}</strong><em>{exception.counterparty ?? "Counterparty unresolved"}</em></p><b>{exception.status.replaceAll("_", " ")}</b></div><blockquote>“{DEMO_EXCEPTION_META[exception.exception_id]?.explanation ?? "The available evidence does not support a safe automatic match."}”</blockquote></section>
+      <section className="showcase-exception-evidence"><p className="eyebrow">WHY THE CONTROLLER ABSTAINED</p>{exception.evidence.slice(0, 3).map((item) => <div key={item.evidence_id}><span><Link2 size={16}/></span><p><strong>{titleCase(item.evidence_type)}</strong><small>{item.summary}</small></p></div>)}</section>
+      <section className="showcase-next-action"><UserCheck size={22}/><p><small>RECOMMENDED NEXT ACTION</small><strong>{exception.next_action}</strong></p></section>
+    </div>;
+  }
+
+  if (scene === "reconciliation" || scene === "exception") {
+    const isReconciliation = scene === "reconciliation";
+    return <div className="showcase-empty"><span>{isReconciliation ? <ArrowLeftRight size={28}/> : <ShieldCheck size={28}/>}</span><strong>{isReconciliation ? "No match proposal in this workspace yet" : "No exception requires review"}</strong><p>{isReconciliation ? "Run a validated close batch to populate transaction-level allocation evidence." : "This batch has no unresolved record to feature in the safe-abstention chapter."}</p></div>;
+  }
+
+  if (scene === "forecast") {
+    const activeScenario = workspace.forecast.scenario.action_type && workspace.forecast.scenario.action_type !== "base";
+    const scenarioLabel = activeScenario ? workspace.forecast.scenario.scenario_name ?? titleCase(workspace.forecast.scenario.action_type ?? "scenario") : "Example: Acme pays 7 days late";
+    return <div className="showcase-forecast">
+      <div className="showcase-forecast-chart"><div><span><i className="confirmed"/>Confirmed</span><span><i className="expected"/>Expected</span><span><i className="risk"/>Risk-adjusted</span></div><CashChart forecast={workspace.forecast} compact/></div>
+      <div className="showcase-forecast-facts"><section><ArrowDownRight size={20}/><small>EXPECTED LOW</small><strong>{compactMoney(workspace.forecast.minimum_expected_cash, workspace.forecast.currency)}</strong><span>{formatDate(workspace.forecast.minimum_expected_cash_date)}</span></section><section><AlertTriangle size={20}/><small>SHORTFALL</small><strong>{workspace.forecast.shortfall_date ? formatDate(workspace.forecast.shortfall_date) : "None"}</strong><span>Calculated from verified records</span></section><section><SlidersHorizontal size={20}/><small>{activeScenario ? "ACTIVE SCENARIO" : "SCENARIO EXAMPLE"}</small><strong>{scenarioLabel}</strong><span>Recalculate, never improvise</span></section></div>
+    </div>;
+  }
+
+  if (scene === "audit") {
+    const scores = [["Precision", matching.precision], ["Recall", matching.recall], ["Automation", matching.automation_coverage], ["Exception recall", matching.exception_recall]] as const;
+    return <div className="showcase-audit">
+      <div className="showcase-score-row">{scores.map(([label, value]) => <section key={label}><small>{label}</small><strong>{confidencePercent(value)}</strong><i><span style={{ width: confidencePercent(value) }}/></i></section>)}</div>
+      <div className="showcase-audit-trail"><header><span><ShieldCheck size={18}/> Append-only recorded decision trail</span><em>{workspace.audit.entries.length} entries</em></header>{workspace.audit.entries.slice(-4).map((entry) => <div key={entry.sequence}><span>{String(entry.sequence).padStart(3, "0")}</span><p><strong>{titleCase(entry.action)}</strong><small>{entry.actor} · {entry.reference}</small></p><time>{formatDate(entry.timestamp, { hour: "2-digit", minute: "2-digit" })}</time></div>)}</div>
+      <p className="showcase-ground-truth"><LockKeyhole size={17}/><span>Independent evaluator · ground truth visible to agent: <strong>NO</strong> · Forecast MAE: <strong>{formatMoney(workspace.evaluation.forecast_metrics.mae, workspace.evaluation.forecast_metrics.currency)}</strong></span></p>
+    </div>;
+  }
+
+  return <div className="showcase-closing">
+    <div className="showcase-closing-mark"><CheckCircle2 size={42}/></div>
+    <p>FROM SOURCE FILES TO A DEFENSIBLE CASH POSITION</p>
+    <h3>Every match evidenced.<br/>Every exception explained.<br/><em>Every forecast calculated.</em></h3>
+    <div><span><Bot size={18}/><strong>Agentic investigation</strong></span><span><ShieldCheck size={18}/><strong>Deterministic control</strong></span><span><Activity size={18}/><strong>Decision-ready cash</strong></span></div>
+    <footer><strong>CashClose AI</strong><span>Cash position, verified.</span></footer>
+  </div>;
 }
 
 function ArchitectureDialog({ onClose }: { onClose: () => void }) {
@@ -1793,14 +2452,66 @@ function DrawerHeader({ icon, eyebrow, title, subtitle, onClose }: { icon: React
   return <header className="drawer-header"><span className="drawer-icon">{icon}</span><div><p className="eyebrow">{eyebrow}</p><h2>{title}</h2><p>{subtitle}</p></div>{onClose ? <button className="icon-button" onClick={onClose} aria-label="Close"><X size={20}/></button> : null}</header>;
 }
 
-function Overlay({ children, onClose, side = false }: { children: ReactNode; onClose?: () => void; side?: boolean }) {
+function Overlay({ children, onClose, side = false, immersive = false }: { children: ReactNode; onClose?: () => void; side?: boolean; immersive?: boolean }) {
+  const overlayRef = useRef<HTMLDivElement | null>(null);
+  const onCloseRef = useRef(onClose);
+  useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
   useEffect(() => {
-    const keydown = (event: KeyboardEvent) => { if (event.key === "Escape") onClose?.(); };
+    const overlay = overlayRef.current;
+    if (!overlay) return;
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const siblings = overlay.parentElement
+      ? Array.from(overlay.parentElement.children).filter((element): element is HTMLElement => element instanceof HTMLElement && element !== overlay)
+      : [];
+    const siblingState = siblings.map((element) => ({
+      element,
+      inert: element.hasAttribute("inert"),
+      ariaHidden: element.getAttribute("aria-hidden"),
+    }));
+    siblings.forEach((element) => {
+      element.setAttribute("inert", "");
+      element.setAttribute("aria-hidden", "true");
+    });
+    const focusable = () => Array.from(overlay.querySelectorAll<HTMLElement>('button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')).filter((element) => element.getClientRects().length > 0);
+    const focusFrame = window.requestAnimationFrame(() => (focusable()[0] ?? overlay).focus());
+    const keydown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onCloseRef.current?.();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const items = focusable();
+      if (!items.length) {
+        event.preventDefault();
+        overlay.focus();
+        return;
+      }
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (event.shiftKey && (document.activeElement === first || !overlay.contains(document.activeElement))) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
     document.addEventListener("keydown", keydown);
     document.body.classList.add("modal-open");
-    return () => { document.removeEventListener("keydown", keydown); document.body.classList.remove("modal-open"); };
-  }, [onClose]);
-  return <div className={`overlay ${side ? "side-overlay" : ""}`} role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose?.(); }}>{children}</div>;
+    return () => {
+      window.cancelAnimationFrame(focusFrame);
+      document.removeEventListener("keydown", keydown);
+      document.body.classList.remove("modal-open");
+      siblingState.forEach(({ element, inert, ariaHidden }) => {
+        if (!inert) element.removeAttribute("inert");
+        if (ariaHidden === null) element.removeAttribute("aria-hidden");
+        else element.setAttribute("aria-hidden", ariaHidden);
+      });
+      previousFocus?.focus();
+    };
+  }, []);
+  return <div ref={overlayRef} tabIndex={-1} className={`overlay ${side ? "side-overlay" : ""} ${immersive ? "immersive-overlay" : ""}`} role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onCloseRef.current?.(); }}>{children}</div>;
 }
 
 function EmptyState({ title, detail, action }: { title: string; detail: string; action?: ReactNode }) {

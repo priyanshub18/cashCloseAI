@@ -146,6 +146,8 @@ export interface BatchView {
   created_at: DateTimeString;
   updated_at: DateTimeString;
   terminal: boolean;
+  orchestration_mode?: string;
+  model_provenance?: ModelOrchestrationProvenance | null;
 }
 
 /** The API currently uses BatchView as its only batch-summary representation. */
@@ -180,6 +182,32 @@ export interface ControllerRunResult {
   exceptions_created: number;
   forecast_id?: Identifier | null;
   report_id?: Identifier | null;
+  model_provenance?: ModelOrchestrationProvenance | null;
+}
+
+export interface ControllerStrategy {
+  batch_id: Identifier;
+  record_order: "source_order" | "highest_value_first";
+  candidate_search: "focused" | "balanced" | "broad";
+  forecast_method: "deterministic" | "monte_carlo";
+  monte_carlo_simulations: number;
+}
+
+export interface ModelToolChoice {
+  response_id: Identifier;
+  call_id: Identifier;
+  tool_name: string;
+  arguments: Record<string, unknown>;
+  outcome: "executed" | "strategy_selected";
+}
+
+export interface ModelOrchestrationProvenance {
+  provider: "openai";
+  requested_model: string;
+  model: string;
+  response_ids: [Identifier, Identifier];
+  tool_choices: ModelToolChoice[];
+  strategy: ControllerStrategy;
 }
 
 export interface RunBatchResponse {
