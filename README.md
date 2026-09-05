@@ -130,20 +130,20 @@ Redis are started as production-target infrastructure but are not yet the
 active repository or background-job runtime; the UI labels this boundary
 explicitly.
 
-Open **New close batch → Execution mode** in the UI. When the API key is
-available, **Agentic Responses** is enabled; otherwise it remains visible but
-locked beside the honestly labeled **Deterministic demo**. Open **Agent trace** during or
-after a run to inspect each transaction and its recorded tool outcomes.
+Open **New close batch** in the UI. The controller uses Responses planning when
+the running API reports it is available; the product workflow remains complete
+without exposing a separate fallback mode. Open **Agent trace** during or after
+a run to inspect each transaction and its recorded tool outcomes.
 
 Responses-guided batches persist structured planning provenance in the batch
 view: model, both response IDs, the selected observation tools, the selected
 strategy, and measured planning latency. The trace presents this separately
-from deterministic transaction tools so it never implies an LLM call occurred
-for every record.
+from finance tool execution so it never implies an LLM call occurred for every
+record.
 
-The deterministic demo can finish in a fraction of a second because it runs
-local, in-memory validated functions with no model-network round trips. That is
-real measured runtime, not an animation. Responses-guided mode adds two bounded
+The local controller path can finish in a fraction of a second because it uses
+in-memory validated functions with no model-network round trips. That is real
+measured runtime, not an animation. Responses-guided execution adds two bounded
 network turns, and the SSE trace records their start, completion, model,
 response references, and latency.
 
