@@ -65,13 +65,14 @@ npm run dev
 
 Open `http://localhost:3000`. All interface paths work without credentials.
 
-For a judge-ready guided tour, click **5-minute showcase** in the sidebar or
-open `http://localhost:3000/?showcase=1`. The tour runs for exactly five
-minutes, can be paused or chapter-skipped, and includes an optional Narration
-toggle. **Record 5:00** asks the browser to capture the CashClose tab, restarts
-the tour, stops at five minutes, and downloads a WebM recording locally. It uses
-the active workspace values while clearly distinguishing live controller
-records from the curated preview fixture.
+For a judge-ready walkthrough, click **Launch demo guide** in the sidebar or
+open `http://localhost:3000/?showcase=1`. The compact guide keeps the working
+application visible, navigates each real workspace, supplies the presenter
+track and on-screen action cues, and runs for exactly five minutes. **Record
+5:00** captures the full tab, restarts the timer, stops at five minutes, and
+downloads a WebM locally. The **System design** workspace shows the connected
+runtime, control flow, trust boundary, component matrix, and honest production
+deployment target.
 
 ### API
 
