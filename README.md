@@ -24,8 +24,8 @@ ground truth.
 - Replayable controller timeline that exposes tool actions—not hidden reasoning
 - Searchable transaction trace with observe, normalize, candidate, allocation,
   evidence, verification, and commit/exception gates for every bank record
-- Truthful execution badges: deterministic runs never claim an OpenAI call, and
-  Agentic Responses is selectable only when the API reports it is configured
+- Truthful execution badges: model provenance appears only when an OpenAI call
+  was made; every controller run retains its operational tool trace
 - Audit/evaluation scorecard and downloadable audit JSON
 - CSV upload preflight experience for bank, invoice, ledger, and remittance data
 - Full requested REST API and Server-Sent Events endpoint
@@ -35,8 +35,8 @@ ground truth.
 - Idempotent commit, verifier approval, currency checks, invoice-reuse
   prevention, and hard-risk exception routing
 - Synthetic 335-row visible dataset plus evaluator-only truth artifacts
-- A timed, ten-chapter five-minute showcase with presenter captions, optional
-  browser narration, and explicit current-versus-target architecture
+- A product-first eight-chapter demo guide that drives the real workspace,
+  includes presenter notes, and exposes current-versus-target infrastructure
 
 ## Repository map
 
