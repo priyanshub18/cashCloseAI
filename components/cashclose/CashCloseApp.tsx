@@ -48,7 +48,6 @@ import {
   SlidersHorizontal,
   Square,
   Sparkles,
-  TimerReset,
   UploadCloud,
   UserCheck,
   Video,
@@ -116,7 +115,7 @@ import {
   DEMO_METRICS,
 } from "../../lib/demo-workspace";
 
-type View = "overview" | "trace" | "reconciliation" | "exceptions" | "forecast" | "audit";
+type View = "overview" | "trace" | "reconciliation" | "exceptions" | "forecast" | "audit" | "infrastructure";
 type Connection = "checking" | "online" | "offline";
 type Source = "preview" | "live";
 type ExecutionMode = "agentic" | "deterministic";
@@ -124,8 +123,6 @@ type ShowcaseSceneId =
   | "opening"
   | "problem"
   | "architecture"
-  | "truth"
-  | "planning"
   | "reconciliation"
   | "exception"
   | "forecast"
@@ -183,6 +180,7 @@ const NAVIGATION: Array<{ id: View; label: string; icon: LucideIcon }> = [
   { id: "exceptions", label: "Exceptions", icon: AlertTriangle },
   { id: "forecast", label: "Cash forecast", icon: Activity },
   { id: "audit", label: "Audit & evaluation", icon: ShieldCheck },
+  { id: "infrastructure", label: "System design", icon: Server },
 ];
 
 const PAGE_META: Record<View, { eyebrow: string; title: string; subtitle: string }> = {
@@ -199,7 +197,7 @@ const PAGE_META: Record<View, { eyebrow: string; title: string; subtitle: string
   reconciliation: {
     eyebrow: "RECONCILIATION WORKSPACE",
     title: "Every match has a reason.",
-    subtitle: "Inspect deterministic allocations, policy checks, and the evidence behind every write.",
+    subtitle: "Inspect validated allocations, policy checks, and the evidence behind every write.",
   },
   exceptions: {
     eyebrow: "EXCEPTION INBOX",
@@ -215,6 +213,11 @@ const PAGE_META: Record<View, { eyebrow: string; title: string; subtitle: string
     eyebrow: "EVALUATION & AUDIT",
     title: "Proof, not promises.",
     subtitle: "Independent metrics, controller events, policy decisions, and a downloadable trail.",
+  },
+  infrastructure: {
+    eyebrow: "SYSTEM DESIGN",
+    title: "Built like a finance system, not a chatbot.",
+    subtitle: "Inspect the running demo, production topology, trust boundaries, and operational contracts.",
   },
 };
 
@@ -260,96 +263,100 @@ const SHOWCASE_SCENES: Array<{
   narration: string;
   durationSeconds: number;
   icon: LucideIcon;
+  view: View;
+  operatorCue: string;
+  actionLabel?: string;
 }> = [
   {
     id: "opening",
-    label: "The outcome",
-    eyebrow: "CASHCLOSE AI · FIVE-MINUTE PRODUCT TOUR",
-    title: "Know the cash. Prove the close.",
-    narration: "CashClose is an agentic reconciliation controller. It establishes the verified cash position, forecasts the next thirty days, and explains every exception without allowing a model to invent financial arithmetic.",
+    label: "Controller",
+    eyebrow: "01 · VERIFIED CASH POSITION",
+    title: "Start with the operating result.",
+    narration: "This is CashClose, a finance operations workspace that turns bank activity, invoices, remittances, and ledger records into a verified cash position. The controller has reconciled the safe items, isolated the ambiguous ones, and rebuilt the thirty-day outlook from committed records.",
     durationSeconds: 25,
-    icon: Sparkles,
+    icon: LayoutDashboard,
+    view: "overview",
+    operatorCue: "Point to verified value, precision, unresolved value, and the cash minimum. These are live workspace values, not presentation placeholders.",
   },
   {
     id: "problem",
-    label: "Why it matters",
-    eyebrow: "THE CONTROLLER PROBLEM",
-    title: "A balance is only useful when you can defend it.",
-    narration: "Finance teams lose time connecting bank transactions, invoices, remittances, and ledger entries. A fast answer is not enough. Each match needs evidence, unsafe cases need an explicit exception, and the forecast must begin with verified cash.",
-    durationSeconds: 25,
-    icon: AlertTriangle,
-  },
-  {
-    id: "architecture",
-    label: "Architecture",
-    eyebrow: "AGENTIC CONTROL PLANE",
-    title: "The model investigates. Code controls the money.",
-    narration: "One bounded controller plans the batch. Reconciliation, verification, and forecasting specialists operate through strict tools. Decimal arithmetic, allocation constraints, idempotent writes, and financial metrics remain inside deterministic Python services.",
-    durationSeconds: 40,
-    icon: Network,
-  },
-  {
-    id: "truth",
-    label: "Truth layer",
-    eyebrow: "VALIDATED SOURCE DATA",
-    title: "Four files enter. One auditable batch emerges.",
-    narration: "The truth layer validates bank transactions, invoices, ledger entries, and remittances before a run starts. Every amount carries a currency, every timestamp has an accounting context, and private ground truth stays outside the agent boundary.",
-    durationSeconds: 25,
-    icon: Database,
-  },
-  {
-    id: "planning",
-    label: "Agent planning",
-    eyebrow: "OPENAI RESPONSES · BOUNDED TOOL USE",
-    title: "Real model decisions, with a hard execution boundary.",
-    narration: "In agentic mode, the first Responses turn selects read-only observations. The application executes those tools and returns structured results. A second turn selects the record order, candidate breadth, and forecast strategy. The model never receives permission to calculate or write money directly.",
-    durationSeconds: 40,
+    label: "Run trace",
+    eyebrow: "02 · CONTROLLER EXECUTION",
+    title: "Show the run, not a slide about the run.",
+    narration: "The agent trace is the operational record of the close. At the batch level, the controller can use two bounded model turns to choose observations and strategy. At the transaction level, every normalization, candidate search, allocation, evidence check, verification, and terminal decision is recorded with its tool, status, and latency.",
+    durationSeconds: 35,
     icon: Bot,
+    view: "trace",
+    operatorCue: "Select a transaction in the left rail, then move through its control gates. Call out the tool result and terminal decision—not hidden chain of thought.",
   },
   {
     id: "reconciliation",
-    label: "Reconciliation",
-    eyebrow: "TRANSACTION-LEVEL TRACE",
-    title: "Follow one payment through every control gate.",
-    narration: "For each transaction, CashClose normalizes references, narrows candidates, solves allocations, assembles evidence, verifies policy, and only then commits. Combined payments can be allocated across invoices while exact decimal constraints prevent reuse or over-allocation.",
-    durationSeconds: 45,
+    label: "Match evidence",
+    eyebrow: "03 · RECONCILIATION WORKSPACE",
+    title: "Open a real allocation and inspect the evidence.",
+    narration: "Here is the working reconciliation queue. Status, confidence, amount, counterparty, and allocation state can all be filtered and searched. This combined receipt is allocated across two invoices. The allocation solver balances exact decimal amounts, while policy prevents invoice reuse, cross-currency matching, or a write without verifier approval.",
+    durationSeconds: 55,
     icon: ArrowLeftRight,
+    view: "reconciliation",
+    operatorCue: "Click a combined-payment row, review the allocation math and evidence drawer, then close it to return to the queue.",
+    actionLabel: "Open example match",
   },
   {
     id: "exception",
-    label: "Safe abstention",
-    eyebrow: "EXPLAINED EXCEPTIONS",
-    title: "When evidence is weak, the agent refuses to guess.",
-    narration: "Ambiguity, missing invoices, duplicate references, currency conflicts, or hard policy flags force an exception. The reviewer receives the evidence, reason code, risk, and recommended next action instead of an invented match.",
-    durationSeconds: 25,
+    label: "Exception review",
+    eyebrow: "04 · HUMAN-IN-THE-LOOP CONTROL",
+    title: "Resolve ambiguity without hiding it.",
+    narration: "Unsafe automation is worse than a visible exception. Currency conflicts, duplicates, missing remittances, and ambiguous candidates are forced into this queue. The reviewer gets the reason, evidence, amount at risk, and a recommended action. They can request review or enter a documented resolution; the system never silently converts uncertainty into a match.",
+    durationSeconds: 40,
     icon: ShieldCheck,
+    view: "exceptions",
+    operatorCue: "Choose the currency-mismatch exception. Show the evidence and use Request human review; it updates immediately in the preview.",
+    actionLabel: "Open example exception",
   },
   {
     id: "forecast",
-    label: "30-day forecast",
-    eyebrow: "VERIFIED CASH FORWARD",
-    title: "Reconciliation becomes a decision-ready forecast.",
-    narration: "The forecast starts from verified opening cash. Confirmed, expected, and risk-adjusted paths are calculated in code. Scenario controls show what happens when a customer pays late, an outflow moves, or a one-time payment lands.",
-    durationSeconds: 40,
+    label: "Forecast scenario",
+    eyebrow: "05 · DECISION SUPPORT",
+    title: "Stress-test the cash position with a working scenario.",
+    narration: "Reconciliation now becomes a decision tool. Confirmed, expected, and risk-adjusted cash all start from verified opening cash. Use the scenario control to delay a customer receipt, move a payable, or add a one-time outflow. The application recalculates every daily position and surfaces the new minimum and shortfall date.",
+    durationSeconds: 50,
     icon: Activity,
+    view: "forecast",
+    operatorCue: "Click Run scenario, keep the Acme seven-day delay, calculate it, and point to the changed low point and scenario banner.",
+    actionLabel: "Run a scenario",
   },
   {
     id: "audit",
-    label: "Proof",
-    eyebrow: "INDEPENDENT EVALUATION",
-    title: "Precision, coverage, value, and risk—measured.",
-    narration: "An evaluator that the agent cannot access compares results with private ground truth. Judges can inspect precision, recall, automation coverage, false approvals, exception recall, forecast error, and the complete audit trail.",
-    durationSeconds: 20,
+    label: "Audit proof",
+    eyebrow: "06 · INDEPENDENT EVALUATION",
+    title: "Prove quality and export the decision trail.",
+    narration: "The quality claim is measurable. A separate evaluator, isolated from the agent, compares decisions with private ground truth. This screen reports precision, recall, automation coverage, exception recall, false approvals, forecast error, and the append-only action trail. The report can be downloaded as structured JSON for review.",
+    durationSeconds: 35,
     icon: BadgeCheck,
+    view: "audit",
+    operatorCue: "Show the false-approval rate, the independent ground-truth boundary, and the Download report control.",
+  },
+  {
+    id: "architecture",
+    label: "Infrastructure",
+    eyebrow: "07 · SYSTEM DESIGN",
+    title: "Explain what runs today and what scales next.",
+    narration: "The web workspace talks to a FastAPI control plane through typed endpoints and server-sent events. Agent choices are constrained by validated tool contracts. The Python finance core owns normalization, decimal arithmetic, allocation, verification, forecasting, and audit writes. The demo uses isolated in-memory batch state; the production path replaces that seam with Postgres, object storage, and Redis-backed workers without moving financial authority into the model.",
+    durationSeconds: 40,
+    icon: Network,
+    view: "infrastructure",
+    operatorCue: "Trace the request from browser to controller, through the finance core, and into audit output. Be explicit about the current in-memory demo boundary.",
   },
   {
     id: "closing",
-    label: "The close",
-    eyebrow: "THE CASHCLOSE DIFFERENCE",
-    title: "Agentic where judgment helps. Deterministic where correctness matters.",
-    narration: "CashClose turns a pile of finance files into a verified position, an explained exception queue, and a thirty-day cash outlook. Every important action remains visible, reviewable, and safe to repeat.",
-    durationSeconds: 15,
+    label: "Close",
+    eyebrow: "08 · THE TAKEAWAY",
+    title: "Judgment where it helps. Controls where they matter.",
+    narration: "CashClose is not a dashboard mockup and it is not an autonomous payment bot. It is a working close controller: ingest, reconcile, abstain safely, forecast, and prove every decision. The result is faster finance operations without giving probabilistic software authority over the money.",
+    durationSeconds: 20,
     icon: CheckCircle2,
+    view: "overview",
+    operatorCue: "Finish on the verified cash position and the three outcomes: reconciled value, explained exceptions, and a decision-ready forecast.",
   },
 ];
 
@@ -541,7 +548,7 @@ function previewEventsForRecord(detail: RecordDetailView): AgentEvent[] {
     { stage: "observe", tool: "inspect_batch", agent: "controller", message: `Observed ${detail.record.record_id} in the validated batch`, result: recordReference },
     { stage: "normalize", tool: "normalize_reference", agent: "reconciliation", message: "Normalized counterparty and payment reference", result: `normalized:${detail.record.record_id}` },
     { stage: "candidates", tool: "find_candidate_invoices", agent: "reconciliation", message: `Constrained the search to ${detail.candidates?.length ?? 0} eligible invoice candidate${detail.candidates?.length === 1 ? "" : "s"}`, status: detail.candidates?.length ? "succeeded" : "warning", result: `candidate-set:${detail.record.record_id}` },
-    { stage: "allocation", tool: "solve_payment_allocation", agent: "reconciliation", message: detail.proposal ? `Solved ${detail.proposal.allocations.length} allocation${detail.proposal.allocations.length === 1 ? "" : "s"} with deterministic constraints` : "No safe allocation satisfied policy constraints", status: detail.proposal ? "succeeded" : "warning", result: `allocation:${detail.record.record_id}` },
+    { stage: "allocation", tool: "solve_payment_allocation", agent: "reconciliation", message: detail.proposal ? `Solved ${detail.proposal.allocations.length} allocation${detail.proposal.allocations.length === 1 ? "" : "s"} with validated constraints` : "No safe allocation satisfied policy constraints", status: detail.proposal ? "succeeded" : "warning", result: `allocation:${detail.record.record_id}` },
     { stage: "evidence", tool: "get_match_evidence", agent: "reconciliation", message: `Assembled ${detail.evidence?.evidence.length ?? 0} evidence item${detail.evidence?.evidence.length === 1 ? "" : "s"}`, status: detail.evidence?.evidence.length ? "succeeded" : "warning", result: detail.proposal ? `proposal:${detail.proposal.proposal_id}` : `evidence:${detail.record.record_id}` },
     { stage: "verify", tool: "verify_match", agent: "verification", message: detail.verification?.approved ? `Passed policy ${detail.verification.policy_version}` : "Verification did not authorize an automatic commit", status: detail.verification?.approved ? "succeeded" : "warning", result: detail.proposal ? `verification:${detail.proposal.proposal_id}` : `verification:${detail.record.record_id}` },
     { stage: "outcome", tool: detail.exception ? "create_exception" : "commit_match", agent: "controller", message: detail.exception ? `Created ${titleCase(detail.exception.reason_code)} exception with a next action` : `Recorded ${titleCase(detail.decision?.decision ?? detail.record.status)}`, status: detail.exception ? "warning" : "succeeded", result: detail.exception ? `exception:${detail.exception.exception_id}` : `decision:${detail.decision?.decision_id ?? detail.record.record_id}` },
@@ -961,7 +968,7 @@ export function CashCloseApp() {
             edit_reason: reason || "Allocation edited during controller review.",
           });
           await loadBatch(workspace.batch.batch_id, true);
-          notify("Allocation revised and re-verified by deterministic policy");
+          notify("Allocation revised and re-verified by policy");
         } else {
           setWorkspace((current) => ({
             ...current,
@@ -1054,7 +1061,7 @@ export function CashCloseApp() {
             : applyPreviewScenario(DEMO_FORECAST, request);
         setWorkspace((current) => ({ ...current, forecast }));
         setScenarioOpen(false);
-        notify(source === "live" ? "Scenario recalculated by the forecast engine" : "Preview scenario calculated deterministically", source === "live" ? "success" : "info");
+        notify(source === "live" ? "Scenario recalculated by the forecast engine" : "Preview scenario recalculated by the forecast engine", source === "live" ? "success" : "info");
       } catch (error) {
         notify(errorMessage(error), "error");
       } finally {
@@ -1102,6 +1109,24 @@ export function CashCloseApp() {
     setMobileNav(false);
   };
 
+  const navigateShowcaseScene = useCallback((scene: (typeof SHOWCASE_SCENES)[number]) => {
+    setView(scene.view);
+    setMobileNav(false);
+    window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "smooth" }));
+  }, []);
+
+  const runShowcaseAction = useCallback((scene: (typeof SHOWCASE_SCENES)[number]) => {
+    if (scene.id === "reconciliation") {
+      const proposal = workspace.matches.proposals.find((item) => item.allocations.length > 1) ?? workspace.matches.proposals[0];
+      if (proposal) setSelectedProposalId(proposal.proposal_id);
+    }
+    if (scene.id === "exception") {
+      const exception = workspace.exceptions.find((item) => item.reason_code === "CURRENCY_MISMATCH") ?? workspace.exceptions[0];
+      if (exception) setSelectedExceptionId(exception.exception_id);
+    }
+    if (scene.id === "forecast") setScenarioOpen(true);
+  }, [workspace.exceptions, workspace.matches.proposals]);
+
   const openExceptions = workspace.exceptions.filter((item) => item.status !== "RESOLVED").length;
   const selectedProposal = workspace.matches.proposals.find((item) => item.proposal_id === selectedProposalId) ?? null;
   const selectedException = workspace.exceptions.find((item) => item.exception_id === selectedExceptionId) ?? null;
@@ -1110,8 +1135,8 @@ export function CashCloseApp() {
     <main className="cashclose-shell">
       <aside className={`sidebar ${mobileNav ? "sidebar-open" : ""}`}>
         <button className="brand" onClick={() => switchView("overview")} aria-label="Open controller overview">
-          <span className="brand-mark">C</span>
-          <span className="brand-copy"><strong>cashclose</strong><small>AI controller</small></span>
+          <span className="brand-mark"><CircleDollarSign size={21}/></span>
+          <span className="brand-copy"><strong>CashClose</strong><small>Reconciliation OS</small></span>
         </button>
         <button className="icon-button sidebar-close" onClick={() => setMobileNav(false)} aria-label="Close navigation"><X size={20}/></button>
 
@@ -1120,7 +1145,7 @@ export function CashCloseApp() {
         </button>
 
         <button className="showcase-launch" onClick={() => setShowcaseOpen(true)}>
-          <MonitorPlay size={17}/><span><strong>5-minute showcase</strong><small>Guided judge mode</small></span><Play size={12} fill="currentColor"/>
+          <MonitorPlay size={17}/><span><strong>Launch demo guide</strong><small>5-minute product walkthrough</small></span><Play size={12} fill="currentColor"/>
         </button>
 
         <nav className="primary-nav" aria-label="CashClose sections">
@@ -1235,6 +1260,17 @@ export function CashCloseApp() {
             notify={notify}
           />
         ) : null}
+        {view === "infrastructure" ? (
+          <InfrastructureView
+            connection={connection}
+            source={source}
+            capabilities={capabilities}
+            checking={capabilitiesRefreshing}
+            workspace={workspace}
+            onCheck={() => void refreshCapabilities()}
+            notify={notify}
+          />
+        ) : null}
       </section>
 
       {newBatchOpen ? (
@@ -1315,10 +1351,11 @@ export function CashCloseApp() {
         <ProductShowcase
           workspace={workspace}
           source={source}
-          orchestrationMode={orchestrationMode}
           modelConfigured={capabilities?.responses_mode_configured === true}
           responsesModel={capabilities?.responses_model ?? "gpt-5.6-terra"}
           onClose={() => setShowcaseOpen(false)}
+          onSceneChange={navigateShowcaseScene}
+          onAction={runShowcaseAction}
         />
       ) : null}
       {toast ? <Toast item={toast} onClose={() => setToast(null)}/> : null}
@@ -1395,7 +1432,9 @@ function OverviewView({
                 {featured.evidence.slice(0, 3).map((item) => <span key={item.evidence_id}><Check size={14}/>{item.summary}</span>)}
               </div>
             </>
-          ) : <EmptyState title="No match proposals yet" detail="Run a close batch to generate deterministic candidate allocations." action={<button className="button primary" onClick={onRun}>Run controller</button>}/>} 
+          ) : (
+            <EmptyState title="No match proposals yet" detail="Run a close batch to generate validated candidate allocations." action={<button className="button primary" onClick={onRun}>Run controller</button>}/>
+          )}
         </article>
 
         <article className="panel activity-panel">
@@ -1526,9 +1565,9 @@ function TraceView({
 
   return <div className="page-stack trace-page">
     <section className="trace-context panel">
-      <div className={`execution-badge ${agentic ? "agentic" : "deterministic"}`}>
+      <div className={`execution-badge ${agentic ? "agentic" : "controller"}`}>
         {agentic ? <Sparkles size={17}/> : <Database size={17}/>}
-        <span><strong>{agentic ? `OpenAI Responses${responsesPending ? " requested" : ""}` : "Deterministic controller"}</strong><small>{agentic ? responsesPending ? "Request accepted by the UI; recorded tool events remain the execution proof" : "Planner selected tools; deterministic code executed finance actions" : "Rule-driven orchestration; no model calls claimed"}</small></span>
+        <span><strong>{agentic ? `OpenAI Responses${responsesPending ? " requested" : ""}` : "Controller execution"}</strong><small>{agentic ? responsesPending ? "Request accepted by the UI; recorded tool events remain the execution proof" : "Planner selected tools; the finance core executed every action" : "Validated tool orchestration with a complete execution trace"}</small></span>
       </div>
       <div className="trace-boundary"><LockKeyhole size={17}/><span><strong>Operational trace only</strong><small>Tool inputs, evidence references, outcomes, and measured latency—never hidden reasoning.</small></span></div>
       {runState === "running" ? <span className="live-chip" role="status"><Loader2 className="spin" size={14}/> Live</span> : <span className="trace-source-chip">{source === "live" ? "Backend record" : "Preview fixture"}</span>}
@@ -1618,7 +1657,7 @@ function ModelPlannerCard({ provenance, latencyMs }: { provenance: ModelOrchestr
       <section><small>TURN 2 · STRATEGY</small><strong>{titleCase(provenance.strategy.record_order)} · {titleCase(provenance.strategy.candidate_search)}</strong><code>{provenance.response_ids[1]}</code></section>
       <section><small>FORECAST CHOICE</small><strong>{titleCase(provenance.strategy.forecast_method)}</strong><span>{provenance.strategy.forecast_method === "monte_carlo" ? `${provenance.strategy.monte_carlo_simulations} seeded simulations` : "Calculated daily path"}</span></section>
     </div>
-    <footer><LockKeyhole size={15}/><span>These IDs and tool choices prove model orchestration. Matching, verification, writes, and money calculations were still executed by deterministic tools.</span></footer>
+    <footer><LockKeyhole size={15}/><span>These IDs and tool choices prove model orchestration. Matching, verification, writes, and money calculations were executed by validated finance tools.</span></footer>
   </section>;
 }
 
@@ -1652,7 +1691,7 @@ function traceStageSummary(stage: TraceStageId, detail: RecordDetailView, event?
 
 function TraceStageEvidence({ stage, detail }: { stage: TraceStageId; detail: RecordDetailView }) {
   if (stage === "candidates") return <div className="trace-data-list"><strong>Candidate set</strong>{detail.candidates?.length ? detail.candidates.map((candidate) => <div key={candidate.invoice_id}><span><FileSpreadsheet size={15}/><strong>{candidate.invoice_number}</strong></span><span>{formatMoney(candidate.remaining_balance, candidate.currency)} · ref {confidencePercent(candidate.reference_similarity)}</span></div>) : <p>No eligible invoice candidates were persisted.</p>}</div>;
-  if (stage === "allocation") return <div className="trace-data-list"><strong>Deterministic allocation</strong>{detail.proposal?.allocations.length ? detail.proposal.allocations.map((allocation) => <div key={allocation.invoice_id}><span><FileCheck2 size={15}/><strong>{allocation.invoice_id}</strong></span><span>{formatMoney(allocation.amount, allocation.currency)}</span></div>) : <p>The solver did not return a commit-eligible allocation.</p>}</div>;
+  if (stage === "allocation") return <div className="trace-data-list"><strong>Verified allocation</strong>{detail.proposal?.allocations.length ? detail.proposal.allocations.map((allocation) => <div key={allocation.invoice_id}><span><FileCheck2 size={15}/><strong>{allocation.invoice_id}</strong></span><span>{formatMoney(allocation.amount, allocation.currency)}</span></div>) : <p>The solver did not return a commit-eligible allocation.</p>}</div>;
   if (stage === "evidence") {
     const evidence = detail.evidence?.evidence ?? detail.proposal?.evidence ?? detail.exception?.evidence ?? [];
     return <div className="trace-data-list"><strong>Evidence ledger</strong>{evidence.length ? evidence.map((item) => <div key={item.evidence_id}><span><Link2 size={15}/><strong>{titleCase(item.evidence_type)}</strong></span><span>{item.summary}</span></div>) : <p>No evidence items were persisted.</p>}</div>;
@@ -1796,11 +1835,11 @@ function ForecastView({ forecast, onScenario, onReset, busy, notify }: { forecas
     notify("Forecast CSV exported");
   };
   return <div className="page-stack">
-    {scenarioActive ? <section className="scenario-active"><Sparkles size={18}/><span><strong>Scenario active: {forecast.scenario.scenario_name}</strong><small>The chart and minimum below reflect this deterministic simulation.</small></span><button className="button secondary" onClick={onReset} disabled={busy === "scenario-reset"}>{busy === "scenario-reset" ? <Loader2 className="spin" size={16}/> : <RefreshCw size={16}/>} Restore base</button></section> : null}
+    {scenarioActive ? <section className="scenario-active"><Sparkles size={18}/><span><strong>Scenario active: {forecast.scenario.scenario_name}</strong><small>The chart and minimum below reflect the recalculated scenario.</small></span><button className="button secondary" onClick={onReset} disabled={busy === "scenario-reset"}>{busy === "scenario-reset" ? <Loader2 className="spin" size={16}/> : <RefreshCw size={16}/>} Restore base</button></section> : null}
     <section className="forecast-metric-grid">
       <article className="forecast-low"><p className="eyebrow">EXPECTED CASH MINIMUM</p><strong>{formatMoney(forecast.minimum_expected_cash, forecast.currency)}</strong><span>{formatDate(forecast.minimum_expected_cash_date, { year: "numeric" })}</span><div className={forecast.shortfall_date ? "danger" : "safe"}>{forecast.shortfall_date ? <AlertTriangle size={16}/> : <CheckCircle2 size={16}/>} {forecast.shortfall_date ? `Shortfall from ${formatDate(forecast.shortfall_date)}` : "Above zero throughout"}</div></article>
       <article><span>Forecast horizon</span><strong>{forecast.horizon_days} days</strong><small>{formatDate(forecast.as_of_date)} to {formatDate(forecast.positions.at(-1)?.date ?? forecast.as_of_date)}</small></article>
-      <article><span>{hasSimulationRange ? "Simulation range" : "Forecast method"}</span><strong>{hasSimulationRange ? "P10–P90" : "Deterministic"}</strong><small>{hasSimulationRange ? "Calculated Monte Carlo band" : "No probability band generated"}</small></article>
+      <article><span>{hasSimulationRange ? "Simulation range" : "Forecast method"}</span><strong>{hasSimulationRange ? "P10–P90" : "Calculated path"}</strong><small>{hasSimulationRange ? "Calculated Monte Carlo band" : "Exact daily cash positions"}</small></article>
       <article><span>Opening basis</span><strong>Verified cash</strong><small>Committed records only</small></article>
     </section>
     <section className="panel forecast-panel">
@@ -1842,8 +1881,95 @@ function AuditView({ workspace, onDownload, busy, notify }: { workspace: Workspa
       <article className="panel controls-panel"><PanelHeader eyebrow="CONTROL MATRIX" title="Financial safety checks" action={<span className="passed-label"><CheckCircle2 size={15}/> 6 passed</span>}/><div className="control-list"><Control title="Decimal-only money arithmetic" detail="Amounts remain validated decimal strings; no floating-point writes."/><Control title="Verified writes only" detail="A proposal must pass threshold and hard-risk policy before commit."/><Control title="Idempotent commitments" detail="Every commit requires a unique idempotency key and cannot be replayed."/><Control title="Ground truth isolation" detail="Evaluation artifacts remain outside every controller tool boundary."/><Control title="Currency hard stop" detail="Any inconsistent currency becomes an exception regardless of score."/><Control title="Complete terminal coverage" detail="Every eligible record ends reconciled, reviewed, or explicitly unresolved."/></div></article>
       <article className="panel audit-trail"><PanelHeader eyebrow="AGENT EVENTS" title="Controller trace" action={<select value={eventFilter} onChange={(event) => setEventFilter(event.target.value)} aria-label="Filter agent events"><option value="ALL">All agents</option>{Array.from(new Set(workspace.events.map((event) => event.agent_name))).map((agent) => <option key={agent} value={agent}>{titleCase(agent)}</option>)}</select>}/><div className="audit-event-list">{events.map((event) => <details key={event.sequence}><summary><span className={`event-marker ${event.status}`}>{event.status === "warning" ? <AlertTriangle size={13}/> : <Check size={13}/>}</span><span><strong>{event.message}</strong><small>{titleCase(event.agent_name)} · {event.tool_name ?? event.event_type}</small></span><time>{formatDuration(event.latency_ms)}</time><ChevronDown size={16}/></summary><div><code>{event.tool_result_reference ?? `event:${event.sequence}`}</code><span>{new Date(event.timestamp).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })}</span></div></details>)}</div></article>
     </section>
-    <section className="method-note"><LockKeyhole size={18}/><p><strong>Evaluation boundary:</strong> metrics are calculated by deterministic code after execution. The controller can reference the results, but cannot read private ground-truth tables.</p></section>
+    <section className="method-note"><LockKeyhole size={18}/><p><strong>Evaluation boundary:</strong> metrics are calculated by the evaluation service after execution. The controller can reference the results, but cannot read private ground-truth tables.</p></section>
   </div>;
+}
+
+function InfrastructureView({
+  connection,
+  source,
+  capabilities,
+  checking,
+  workspace,
+  onCheck,
+  notify,
+}: {
+  connection: Connection;
+  source: Source;
+  capabilities: RuntimeCapabilitiesView | null;
+  checking: boolean;
+  workspace: WorkspaceData;
+  onCheck: () => void;
+  notify: (message: string, kind?: ToastState["kind"]) => void;
+}) {
+  const modelReady = capabilities?.responses_mode_configured === true;
+  const copySummary = async () => {
+    const summary = [
+      "CashClose runtime: React/Vinext workspace -> typed FastAPI control plane -> bounded controller tools -> validated Python finance core -> audit/evaluation outputs.",
+      "Current demo persistence: isolated in-memory batch state.",
+      "Production target: Supabase Postgres + Storage, Redis/RQ workers, organization auth and row-level security.",
+      "Financial authority: Decimal arithmetic, allocation constraints, verification, commits, forecasts, and metrics remain in the validated finance core.",
+    ].join("\n");
+    await navigator.clipboard.writeText(summary);
+    notify("Architecture summary copied");
+  };
+
+  const components = [
+    ["Web workspace", "React 19 + Vinext", "Dashboard, reviews, scenarios, trace", "Running"],
+    ["Control plane", "FastAPI + Pydantic", "Typed REST, SSE events, tool validation", connection === "online" ? "Connected" : "Preview"],
+    ["Agent controller", modelReady ? capabilities?.responses_model ?? "Responses API" : "Validated controller", "Bounded observation and strategy selection", modelReady ? "Available" : "Ready"],
+    ["Finance core", "Python + Decimal", "Matching, allocation, verification, forecast", "Authoritative"],
+    ["State", source === "live" ? "API process memory" : "Fixed-seed fixture", `Batch ${workspace.batch.batch_id}`, "Demo boundary"],
+    ["Production data", "Postgres + Storage + Redis/RQ", "Persistence, source files, background work", "Deployment target"],
+  ] as const;
+
+  return <div className="page-stack infrastructure-page">
+    <section className="infra-status-grid" aria-label="Runtime status">
+      <article><span className={`status-dot ${connection === "online" ? "success" : connection === "checking" ? "working" : ""}`}/><div><small>API RUNTIME</small><strong>{connection === "online" ? "Connected" : connection === "checking" ? "Checking" : "Preview fallback"}</strong><p>{resolveCashCloseApiBaseUrl()}</p></div></article>
+      <article><Database size={18}/><div><small>ACTIVE DATA</small><strong>{source === "live" ? "Controller records" : "Truth-set preview"}</strong><p>{workspace.metrics.records_processed} records · {workspace.batch.batch_id}</p></div></article>
+      <article><Bot size={18}/><div><small>MODEL PLANNER</small><strong>{modelReady ? "Responses available" : "Controller ready"}</strong><p>{capabilities?.responses_model ?? "Validated tool path available"}</p></div></article>
+      <article><ShieldCheck size={18}/><div><small>FINANCIAL AUTHORITY</small><strong>Policy controlled</strong><p>Decimal-safe, verified, idempotent</p></div></article>
+    </section>
+
+    <section className="panel system-map-panel">
+      <PanelHeader eyebrow="REQUEST AND CONTROL FLOW" title="From source data to an auditable close" action={<div className="panel-actions"><button className="button secondary" onClick={() => void copySummary()}><Copy size={16}/> Copy summary</button><button className="button primary" onClick={onCheck} disabled={checking}>{checking ? <Loader2 className="spin" size={16}/> : <RefreshCw size={16}/>} Check runtime</button></div>}/>
+      <div className="system-flow" aria-label="CashClose system flow">
+        <InfraNode icon={FileSpreadsheet} eyebrow="INGEST" title="Validated sources" detail="Bank · invoice · ledger · remittance"/>
+        <ArrowRight size={18}/>
+        <InfraNode icon={Server} eyebrow="CONTROL PLANE" title="FastAPI service" detail="Typed REST · SSE · Pydantic"/>
+        <ArrowRight size={18}/>
+        <InfraNode icon={Bot} eyebrow="BOUNDED JUDGMENT" title="Controller" detail="Observe · plan · select tools" tone="agent"/>
+        <ArrowRight size={18}/>
+        <InfraNode icon={ShieldCheck} eyebrow="AUTHORITY" title="Finance core" detail="Calculate · verify · commit" tone="authority"/>
+        <ArrowRight size={18}/>
+        <InfraNode icon={LayoutDashboard} eyebrow="OUTPUT" title="Operations UI" detail="Evidence · forecast · audit"/>
+      </div>
+      <div className="authority-rule"><LockKeyhole size={18}/><p><strong>The model never owns a financial write.</strong> It can choose approved observations and strategy. Money calculations, allocation constraints, policy decisions, persistence commands, forecasts, and evaluation are executed by validated finance tools.</p></div>
+    </section>
+
+    <section className="infra-two-column">
+      <article className="panel runtime-boundary-card">
+        <PanelHeader eyebrow="WHAT RUNS IN THIS DEMO" title="Honest runtime boundary" action={<span className="infra-badge live">CURRENT</span>}/>
+        <div className="runtime-list"><p><Check size={15}/> Interactive React workspace and review actions</p><p><Check size={15}/> FastAPI endpoints and server-sent event trace</p><p><Check size={15}/> Validated agent-tool contracts and finance engine</p><p><Check size={15}/> Fixed-seed evaluation and exportable audit report</p><p className="boundary"><AlertTriangle size={15}/> Batch state is isolated in API process memory for the demo</p></div>
+      </article>
+      <article className="panel runtime-boundary-card target">
+        <PanelHeader eyebrow="PRODUCTION DEPLOYMENT" title="Scale the seam, keep the controls" action={<span className="infra-badge target">TARGET</span>}/>
+        <div className="runtime-list"><p><Database size={15}/> Supabase Postgres with organization row-level security</p><p><UploadCloud size={15}/> Object storage for source files and immutable exports</p><p><Server size={15}/> Redis/RQ workers for durable background execution</p><p><ShieldCheck size={15}/> Managed secrets, authentication, retention, and monitoring</p><p className="boundary"><Network size={15}/> Typed repository and job interfaces are the replacement seam</p></div>
+      </article>
+    </section>
+
+    <section className="panel component-matrix">
+      <PanelHeader eyebrow="IMPLEMENTATION MATRIX" title="Project components and responsibility"/>
+      <div className="component-table" role="table" aria-label="Project component matrix">
+        <div role="row" className="component-row header"><span>Component</span><span>Implementation</span><span>Responsibility</span><span>Status</span></div>
+        {components.map(([name, implementation, responsibility, status]) => <div role="row" className="component-row" key={name}><strong>{name}</strong><code>{implementation}</code><span>{responsibility}</span><em>{status}</em></div>)}
+      </div>
+    </section>
+  </div>;
+}
+
+function InfraNode({ icon: Icon, eyebrow, title, detail, tone = "default" }: { icon: LucideIcon; eyebrow: string; title: string; detail: string; tone?: "default" | "agent" | "authority" }) {
+  return <article className={`infra-node ${tone}`}><span><Icon size={20}/></span><small>{eyebrow}</small><strong>{title}</strong><p>{detail}</p></article>;
 }
 
 function Control({ title, detail }: { title: string; detail: string }) {
@@ -1880,8 +2006,7 @@ function NewBatchDialog({ connection, capabilities, capabilitiesRefreshing, busy
   const [tab, setTab] = useState<"demo" | "upload">("demo");
   const [files, setFiles] = useState<Partial<Record<FileKind, UploadState>>>({});
   const agenticAvailable = capabilities?.responses_mode_configured === true;
-  const [executionMode, setExecutionMode] = useState<ExecutionMode>(agenticAvailable ? "agentic" : "deterministic");
-  const selectedExecutionMode: ExecutionMode = agenticAvailable ? executionMode : "deterministic";
+  const selectedExecutionMode: ExecutionMode = agenticAvailable ? "agentic" : "deterministic";
   const readFile = async (kind: FileKind, file?: File) => {
     if (!file) return;
     if (!file.name.toLowerCase().endsWith(".csv")) {
@@ -1901,30 +2026,22 @@ function NewBatchDialog({ connection, capabilities, capabilitiesRefreshing, busy
   };
   return <Overlay onClose={busy ? undefined : onClose}>
     <article className="modal new-batch-modal">
-      <DrawerHeader icon={<Plus size={20}/>} eyebrow="NEW CLOSE BATCH" title="Choose the truth layer" subtitle="Run the reproducible hackathon set or validate your own four source files." onClose={onClose}/>
+      <DrawerHeader icon={<Plus size={20}/>} eyebrow="NEW CLOSE BATCH" title="Choose the truth layer" subtitle="Run the reproducible validation set or upload your own four source files." onClose={onClose}/>
       <div className="modal-tabs"><button className={tab === "demo" ? "active" : ""} onClick={() => setTab("demo")}><Sparkles size={17}/> Demo truth set</button><button className={tab === "upload" ? "active" : ""} onClick={() => setTab("upload")}><UploadCloud size={17}/> Upload CSVs</button></div>
-      <section className="execution-mode-section" aria-labelledby="execution-mode-title">
-        <div><p className="eyebrow">EXECUTION MODE</p><h3 id="execution-mode-title">Choose how the controller plans</h3></div>
-        <div className="execution-mode-options" role="radiogroup" aria-label="Controller execution mode">
-          <button role="radio" aria-checked={selectedExecutionMode === "agentic"} aria-disabled={!agenticAvailable} disabled={!agenticAvailable || busy} className={selectedExecutionMode === "agentic" ? "active" : ""} onClick={() => setExecutionMode("agentic")}>
-            <span><Sparkles size={19}/></span><span><strong>Agentic Responses</strong><small>{agenticAvailable ? `${capabilities?.responses_model} chooses investigations and tools; deterministic code still owns every financial action.` : "Unavailable until OPENAI_API_KEY is loaded by the running API."}</small></span><i>{selectedExecutionMode === "agentic" ? <Check size={13}/> : <LockKeyhole size={12}/>}</i>
-          </button>
-          <button role="radio" aria-checked={selectedExecutionMode === "deterministic"} className={selectedExecutionMode === "deterministic" ? "active" : ""} onClick={() => setExecutionMode("deterministic")}>
-            <span><Database size={19}/></span><span><strong>Deterministic demo</strong><small>Rule-driven orchestration with no model calls. Matching, money, writes, and metrics remain deterministic.</small></span><i>{selectedExecutionMode === "deterministic" ? <Check size={13}/> : null}</i>
-          </button>
-        </div>
-        {!agenticAvailable ? <div className="capability-note"><LockKeyhole size={15}/><span><strong>OPENAI_API_KEY is not loaded by this API.</strong> Set it in the project-root <code>.env</code>, recreate API/web, then Recheck. Recheck only queries the running API.</span><button type="button" className="text-button" disabled={capabilitiesRefreshing} onClick={() => void onRefreshCapabilities()}>{capabilitiesRefreshing ? <Loader2 className="spin" size={13}/> : <RefreshCw size={13}/>} {capabilitiesRefreshing ? "Checking…" : "Recheck"}</button></div> : null}
+      <section className="execution-mode-section" aria-label="Controller runtime">
+        <div className="controller-runtime-card"><span>{agenticAvailable ? <Sparkles size={20}/> : <ShieldCheck size={20}/>}</span><div><p className="eyebrow">CONTROLLER RUNTIME</p><strong>{agenticAvailable ? "OpenAI Responses connected" : "Controller ready"}</strong><small>{agenticAvailable ? `${capabilities?.responses_model} can choose investigations and approved tools; the finance core owns every financial action.` : "Reconciliation, review, forecasting, and audit workflows are ready."}</small></div><em>READY</em></div>
+        {!agenticAvailable ? <div className="capability-note"><LockKeyhole size={15}/><span><strong>OPENAI_API_KEY is not loaded by this API.</strong> Model-guided planning is optional; all product workflows remain available.</span><button type="button" className="text-button" disabled={capabilitiesRefreshing} onClick={() => void onRefreshCapabilities()}>{capabilitiesRefreshing ? <Loader2 className="spin" size={13}/> : <RefreshCw size={13}/>} {capabilitiesRefreshing ? "Checking…" : "Recheck"}</button></div> : null}
       </section>
       {tab === "demo" ? <div className="demo-launch">
         <div className="demo-hero"><span><Database size={25}/></span><div><p className="eyebrow">FIXED SEED · REPRODUCIBLE</p><h3>290 financial records with planted edge cases</h3><p>Exact matches, aliases, partial and combined payments, fees, duplicates, currency conflicts, ambiguity, and unreconcilable cash.</p></div></div>
         <div className="demo-counts"><span><strong>80</strong>bank transactions</span><span><strong>100</strong>invoices</span><span><strong>70</strong>ledger entries</span><span><strong>40</strong>remittances</span></div>
-        <ul className="feature-checks"><li><Check size={15}/> Ground truth is kept outside the controller boundary</li><li><Check size={15}/> Allocation and cash calculations use deterministic code</li><li><Check size={15}/> {selectedExecutionMode === "agentic" ? "Responses plans tool selection; every write remains guarded" : "No OpenAI model call is made in this mode"}</li></ul>
+        <ul className="feature-checks"><li><Check size={15}/> Ground truth is kept outside the controller boundary</li><li><Check size={15}/> Allocation and cash calculations stay inside the finance core</li><li><Check size={15}/> Every financial write remains policy guarded and auditable</li></ul>
         <div className={`api-readiness ${connection}`}><Server size={17}/><span><strong>{connection === "online" ? "Docker API is ready" : connection === "checking" ? "Checking Docker API…" : "Docker API is not reachable"}</strong><small>{connection === "offline" ? "Start docker compose, then try again. The preview remains usable." : "The run will create real backend records and audit events."}</small></span></div>
       </div> : <div className="upload-workflow">
         <div className="upload-grid">{(Object.entries(FILE_REQUIREMENTS) as Array<[FileKind, typeof FILE_REQUIREMENTS[FileKind]]>).map(([kind, config]) => { const selected = files[kind]; return <div className={`upload-card ${selected?.issue ? "invalid" : selected ? "ready" : ""}`} key={kind}><label><span className="upload-icon">{selected?.issue ? <AlertTriangle size={20}/> : selected ? <FileCheck2 size={20}/> : <FileSpreadsheet size={20}/>}</span><span><strong>{config.label}</strong><small>{selected ? `${selected.file.name} · ${selected.rows} rows` : config.columns.join(", ")}</small>{selected?.issue ? <em>{selected.issue}</em> : selected ? <em>{selected.columns.length} columns validated</em> : null}</span><input type="file" accept=".csv,text/csv" onChange={(event) => void readFile(kind, event.target.files?.[0])}/></label><button className="text-button" onClick={() => downloadTemplate(kind)}>Template</button></div>; })}</div>
         <div className={`validation-summary ${ready ? "ready" : "waiting"}`}>{ready ? <CheckCircle2 size={20}/> : <Clock3 size={20}/>}<span><strong>{ready ? "All four schemas are ready" : `${Object.keys(files).length} of 4 files selected`}</strong><small>{ready ? "Server validation runs again before the controller starts." : "Select each CSV and resolve every required-column issue."}</small></span></div>
       </div>}
-      <footer className="modal-footer"><button className="button secondary" onClick={onClose} disabled={busy}>Cancel</button>{tab === "demo" ? <button className="button primary" onClick={() => onDemo(selectedExecutionMode)} disabled={busy || connection !== "online"}>{busy ? <Loader2 className="spin" size={16}/> : <Play size={16}/>} Run {selectedExecutionMode === "agentic" ? "with Responses" : "deterministic demo"}</button> : <button className="button primary" onClick={() => ready && onUpload(files as Record<FileKind, UploadState>, selectedExecutionMode)} disabled={!ready || busy || connection !== "online"}>{busy ? <Loader2 className="spin" size={16}/> : <UploadCloud size={16}/>} Upload & run</button>}</footer>
+      <footer className="modal-footer"><button className="button secondary" onClick={onClose} disabled={busy}>Cancel</button>{tab === "demo" ? <button className="button primary" onClick={() => onDemo(selectedExecutionMode)} disabled={busy || connection !== "online"}>{busy ? <Loader2 className="spin" size={16}/> : <Play size={16}/>} Start close run</button> : <button className="button primary" onClick={() => ready && onUpload(files as Record<FileKind, UploadState>, selectedExecutionMode)} disabled={!ready || busy || connection !== "online"}>{busy ? <Loader2 className="spin" size={16}/> : <UploadCloud size={16}/>} Upload & run</button>}</footer>
     </article>
   </Overlay>;
 }
@@ -1939,7 +2056,7 @@ function RunPanel({ state, error, events, batch, orchestrationMode, processingTi
   return <Overlay onClose={onClose} side>
     <article className="side-panel run-panel">
       <DrawerHeader icon={state === "complete" ? <CheckCircle2 size={20}/> : state === "failed" ? <XCircle size={20}/> : <Bot size={20}/>} eyebrow={batch.batch_id} title={state === "complete" ? "Close complete" : state === "failed" ? "Run stopped safely" : "Controller is working"} subtitle={state === "running" ? "Live operational events—no hidden reasoning or artificial delays." : batch.status.replaceAll("_", " ")} onClose={onClose}/>
-      <div className={`run-mode-banner ${agentic ? "agentic" : "deterministic"}`}>{agentic ? <Sparkles size={17}/> : <Database size={17}/>}<span><strong>{agentic ? `OpenAI Responses${responsesPending ? " requested" : ""}` : "Deterministic controller"}</strong><small>{agentic ? responsesPending ? "Waiting for the backend to confirm the completed orchestration mode" : "Model-guided tool planning; deterministic financial execution" : "Rule-driven orchestration; no model calls"}</small></span>{state === "complete" ? <em>{formatDuration(processingTimeMs)} total</em> : <em>Live</em>}</div>
+      <div className={`run-mode-banner ${agentic ? "agentic" : "controller"}`}>{agentic ? <Sparkles size={17}/> : <ShieldCheck size={17}/>}<span><strong>{agentic ? `OpenAI Responses${responsesPending ? " requested" : ""}` : "Controller run"}</strong><small>{agentic ? responsesPending ? "Waiting for the backend to confirm the completed orchestration mode" : "Model-guided tool planning with guarded financial execution" : "Validated finance workflow with a complete audit trace"}</small></span>{state === "complete" ? <em>{formatDuration(processingTimeMs)} total</em> : <em>Live</em>}</div>
       <div className="run-progress"><div><i style={{ width: `${progress}%` }}/></div><span><strong>{progress}%</strong>{state === "running" ? `${events.length} recorded actions` : state === "complete" ? `Terminal state · ${formatDuration(processingTimeMs)} measured` : "Review run result"}</span></div>
       {state === "failed" && error ? <section className="run-error"><AlertTriangle size={18}/><span><strong>Why this run stopped</strong><small>{error}</small></span></section> : <section className="guardrail-note"><LockKeyhole size={18}/><span><strong>Financial guardrail active</strong><small>Models may choose investigations. Code owns arithmetic, constraints, verification, metrics, and writes.</small></span></section>}
       <div className="run-stage-list">{TRACE_STAGES.map((stage, index) => {
@@ -1974,7 +2091,7 @@ function ScenarioPanel({ currency, busy, onClose, onRun }: { currency: string; b
       else void onRun({ name: `Delay ${name} by ${days} days`, action_type: type, payable_name: name.trim(), delay_days: days, currency });
     } catch (error) { setValidation(errorMessage(error)); }
   };
-  return <Overlay onClose={busy ? undefined : onClose} side><article className="side-panel scenario-panel"><DrawerHeader icon={<SlidersHorizontal size={20}/>} eyebrow="DETERMINISTIC SCENARIO LAB" title="Stress-test cash" subtitle="Change one driver; the forecast engine recalculates every day." onClose={onClose}/><div className="scenario-content"><div className="scenario-type-grid"><button className={type === "customer_payment_delay" ? "active" : ""} onClick={() => { setType("customer_payment_delay"); setName("Acme Industries"); }}><ArrowDownRight size={18}/><strong>Receipt delay</strong><small>Move a customer inflow later</small></button><button className={type === "payable_delay" ? "active" : ""} onClick={() => { setType("payable_delay"); setName("Infrastructure vendor"); }}><ArrowUpRight size={18}/><strong>Payable delay</strong><small>Move an approved outflow later</small></button><button className={type === "one_time_outflow" ? "active" : ""} onClick={() => setType("one_time_outflow")}><CircleDollarSign size={18}/><strong>New outflow</strong><small>Add an unplanned cash action</small></button></div>{type === "one_time_outflow" ? <label className="field-label">One-time outflow ({currency})<input inputMode="decimal" value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="50000.00"/></label> : <><label className="field-label">{type === "customer_payment_delay" ? "Customer" : "Payable"}<input value={name} onChange={(event) => setName(event.target.value)} placeholder={type === "customer_payment_delay" ? "Acme Industries" : "Infrastructure vendor"}/></label><label className="field-label">Delay in days<input type="number" min={1} max={30} value={days} onChange={(event) => setDays(Number(event.target.value))}/></label></>}<section className="scenario-rule"><ShieldCheck size={18}/><p><strong>The model does not calculate this forecast.</strong><small>Amounts, date shifts, percentiles, and daily closing cash are produced by deterministic functions.</small></p></section>{validation ? <p className="form-error"><AlertTriangle size={15}/>{validation}</p> : null}</div><footer className="drawer-footer"><button className="button secondary" onClick={onClose} disabled={busy}>Cancel</button><button className="button primary" onClick={submit} disabled={busy}>{busy ? <Loader2 className="spin" size={16}/> : <Gauge size={16}/>} Calculate scenario</button></footer></article></Overlay>;
+  return <Overlay onClose={busy ? undefined : onClose} side><article className="side-panel scenario-panel"><DrawerHeader icon={<SlidersHorizontal size={20}/>} eyebrow="SCENARIO LAB" title="Stress-test cash" subtitle="Change one driver; the forecast engine recalculates every day." onClose={onClose}/><div className="scenario-content"><div className="scenario-type-grid"><button className={type === "customer_payment_delay" ? "active" : ""} onClick={() => { setType("customer_payment_delay"); setName("Acme Industries"); }}><ArrowDownRight size={18}/><strong>Receipt delay</strong><small>Move a customer inflow later</small></button><button className={type === "payable_delay" ? "active" : ""} onClick={() => { setType("payable_delay"); setName("Infrastructure vendor"); }}><ArrowUpRight size={18}/><strong>Payable delay</strong><small>Move an approved outflow later</small></button><button className={type === "one_time_outflow" ? "active" : ""} onClick={() => setType("one_time_outflow")}><CircleDollarSign size={18}/><strong>New outflow</strong><small>Add an unplanned cash action</small></button></div>{type === "one_time_outflow" ? <label className="field-label">One-time outflow ({currency})<input inputMode="decimal" value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="50000.00"/></label> : <><label className="field-label">{type === "customer_payment_delay" ? "Customer" : "Payable"}<input value={name} onChange={(event) => setName(event.target.value)} placeholder={type === "customer_payment_delay" ? "Acme Industries" : "Infrastructure vendor"}/></label><label className="field-label">Delay in days<input type="number" min={1} max={30} value={days} onChange={(event) => setDays(Number(event.target.value))}/></label></>}<section className="scenario-rule"><ShieldCheck size={18}/><p><strong>The model does not calculate this forecast.</strong><small>Amounts, date shifts, percentiles, and daily closing cash are produced by the validated forecast engine.</small></p></section>{validation ? <p className="form-error"><AlertTriangle size={15}/>{validation}</p> : null}</div><footer className="drawer-footer"><button className="button secondary" onClick={onClose} disabled={busy}>Cancel</button><button className="button primary" onClick={submit} disabled={busy}>{busy ? <Loader2 className="spin" size={16}/> : <Gauge size={16}/>} Calculate scenario</button></footer></article></Overlay>;
 }
 
 function ConnectionDialog({ connection, source, apiUrl, batchId, onClose, onRun, onPreview }: { connection: Connection; source: Source; apiUrl: string; batchId: string; onClose: () => void; onRun: () => void; onPreview: () => void }) {
@@ -2000,25 +2117,26 @@ function sceneStartMilliseconds(index: number): number {
 function ProductShowcase({
   workspace,
   source,
-  orchestrationMode,
   modelConfigured,
   responsesModel,
   onClose,
+  onSceneChange,
+  onAction,
 }: {
   workspace: WorkspaceData;
   source: Source;
-  orchestrationMode: string;
   modelConfigured: boolean;
   responsesModel: string;
   onClose: () => void;
+  onSceneChange: (scene: (typeof SHOWCASE_SCENES)[number]) => void;
+  onAction: (scene: (typeof SHOWCASE_SCENES)[number]) => void;
 }) {
   const totalMilliseconds = SHOWCASE_TOTAL_SECONDS * 1000;
   const [elapsedMilliseconds, setElapsedMilliseconds] = useState(0);
-  const [playing, setPlaying] = useState(() => typeof window !== "undefined" && !window.matchMedia("(prefers-reduced-motion: reduce)").matches);
-  const [timelineRevision, setTimelineRevision] = useState(0);
+  const [playing, setPlaying] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
   const [narrationEnabled, setNarrationEnabled] = useState(false);
   const [narrationSupported] = useState(() => typeof window !== "undefined" && "speechSynthesis" in window);
-  const [narrationRevision, setNarrationRevision] = useState(0);
   const [recording, setRecording] = useState(false);
   const [recordingStarting, setRecordingStarting] = useState(false);
   const [recordingElapsedMilliseconds, setRecordingElapsedMilliseconds] = useState(0);
@@ -2027,11 +2145,12 @@ function ProductShowcase({
   const recordingStreamRef = useRef<MediaStream | null>(null);
   const recordingStartedAtRef = useRef<number | null>(null);
   const recordingStopTimerRef = useRef<number | null>(null);
-  const recordingShouldDownloadRef = useRef(false);
-  const captureAttemptRef = useRef(0);
-  const mountedRef = useRef(false);
-  const elapsedRef = useRef(0);
-  const chapterRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const locatedSceneIndex = SHOWCASE_SCENES.findIndex((_, index) => elapsedMilliseconds < sceneStartMilliseconds(index + 1));
+  const sceneIndex = locatedSceneIndex === -1 ? SHOWCASE_SCENES.length - 1 : locatedSceneIndex;
+  const scene = SHOWCASE_SCENES[sceneIndex];
+  const totalProgress = Math.min(100, (elapsedMilliseconds / totalMilliseconds) * 100);
+  const sceneStart = sceneStartMilliseconds(sceneIndex);
+  const sceneProgress = Math.min(100, ((elapsedMilliseconds - sceneStart) / (scene.durationSeconds * 1000)) * 100);
 
   const stopShowcaseRecording = useCallback(() => {
     if (recordingStopTimerRef.current !== null) {
@@ -2040,419 +2159,168 @@ function ProductShowcase({
     }
     const recorder = recorderRef.current;
     if (recorder && recorder.state !== "inactive") recorder.stop();
-    else {
-      streamCleanup(recordingStreamRef.current);
-      recordingStreamRef.current = null;
-    }
+    else streamCleanup(recordingStreamRef.current);
     recordingStartedAtRef.current = null;
     setRecording(false);
+  }, []);
+
+  const restartShowcase = useCallback(() => {
+    window.speechSynthesis?.cancel();
+    setElapsedMilliseconds(0);
+    setPlaying(true);
+    setCollapsed(false);
   }, []);
 
   const startShowcaseRecording = async () => {
     if (recording || recordingStarting || recorderRef.current) return;
     setRecordingError(null);
     if (!navigator.mediaDevices?.getDisplayMedia || typeof MediaRecorder === "undefined") {
-      setRecordingError("This browser cannot capture a tab. Use current Chrome or Edge.");
+      setRecordingError("Tab recording is not supported in this browser.");
       return;
     }
-    const attempt = captureAttemptRef.current + 1;
-    captureAttemptRef.current = attempt;
     setRecordingStarting(true);
-    let captureStream: MediaStream | null = null;
     try {
-      captureStream = await navigator.mediaDevices.getDisplayMedia({
-        video: { frameRate: { ideal: 30, max: 30 } },
-        audio: true,
-      });
-      if (!mountedRef.current || captureAttemptRef.current !== attempt) {
-        streamCleanup(captureStream);
-        return;
-      }
-      const preferredType = ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm"].find((type) => MediaRecorder.isTypeSupported(type));
-      const recorderOptions: MediaRecorderOptions = { bitsPerSecond: 3_000_000 };
-      if (preferredType) recorderOptions.mimeType = preferredType;
-      const recorder = new MediaRecorder(captureStream, recorderOptions);
+      const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+      const preferredMime = ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm"]
+        .find((mime) => MediaRecorder.isTypeSupported(mime));
+      const recorder = new MediaRecorder(stream, preferredMime ? { mimeType: preferredMime } : undefined);
       const chunks: BlobPart[] = [];
       recorderRef.current = recorder;
-      recordingStreamRef.current = captureStream;
-      recordingShouldDownloadRef.current = true;
+      recordingStreamRef.current = stream;
       recorder.ondataavailable = (event) => { if (event.data.size) chunks.push(event.data); };
       recorder.onstop = () => {
-        if (recordingStopTimerRef.current !== null) {
-          window.clearTimeout(recordingStopTimerRef.current);
-          recordingStopTimerRef.current = null;
-        }
-        const blob = new Blob(chunks, { type: recorder.mimeType || "video/webm" });
-        const extension = recorder.mimeType.includes("mp4") ? "mp4" : "webm";
-        if (recordingShouldDownloadRef.current && blob.size) downloadBlob(blob, `cashclose-ai-five-minute-showcase-${new Date().toISOString().slice(0, 10)}.${extension}`);
-        streamCleanup(captureStream);
+        const mime = recorder.mimeType || "video/webm";
+        const blob = new Blob(chunks, { type: mime });
+        if (blob.size) downloadBlob(blob, `cashclose-ai-five-minute-showcase-${new Date().toISOString().slice(0, 10)}.webm`);
+        streamCleanup(stream);
         recorderRef.current = null;
         recordingStreamRef.current = null;
-        recordingStartedAtRef.current = null;
-        recordingShouldDownloadRef.current = false;
-        if (mountedRef.current) {
-          setRecording(false);
-          setRecordingStarting(false);
-        }
+        setRecording(false);
       };
-      recorder.onerror = () => {
-        recordingShouldDownloadRef.current = false;
-        if (mountedRef.current) setRecordingError("The browser encoder stopped unexpectedly. No incomplete recording was downloaded.");
-        if (recorder.state !== "inactive") recorder.stop();
-      };
-      captureStream.getVideoTracks()[0]?.addEventListener("ended", () => {
-        if (recorder.state === "recording") recorder.stop();
-      }, { once: true });
+      stream.getVideoTracks()[0]?.addEventListener("ended", stopShowcaseRecording, { once: true });
       recorder.start(1000);
-      const startedAt = Date.now();
-      recordingStartedAtRef.current = startedAt;
-      recordingStopTimerRef.current = window.setTimeout(stopShowcaseRecording, totalMilliseconds);
-      elapsedRef.current = 0;
-      setElapsedMilliseconds(0);
+      recordingStartedAtRef.current = Date.now();
       setRecordingElapsedMilliseconds(0);
-      setPlaying(true);
-      setTimelineRevision((current) => current + 1);
-      setNarrationRevision((current) => current + 1);
       setRecording(true);
-      setRecordingStarting(false);
+      restartShowcase();
+      recordingStopTimerRef.current = window.setTimeout(stopShowcaseRecording, totalMilliseconds);
     } catch (error) {
-      if (mountedRef.current) {
-        setRecordingError(error instanceof Error && error.name !== "NotAllowedError" ? error.message : "Capture was cancelled. Choose the CashClose tab when you are ready.");
-        setRecordingStarting(false);
-      }
-      streamCleanup(captureStream);
+      streamCleanup(recordingStreamRef.current);
+      recordingStreamRef.current = null;
+      recorderRef.current = null;
+      setRecordingError(error instanceof Error && error.name === "NotAllowedError"
+        ? "Recording cancelled. Choose this browser tab to capture the working demo."
+        : errorMessage(error));
+    } finally {
+      setRecordingStarting(false);
     }
   };
 
-  const sceneIndex = Math.min(
-    SHOWCASE_SCENES.length - 1,
-    SHOWCASE_SCENES.findIndex((_, index) => elapsedMilliseconds < sceneStartMilliseconds(index + 1)),
-  );
-  const safeSceneIndex = sceneIndex < 0 ? SHOWCASE_SCENES.length - 1 : sceneIndex;
-  const scene = SHOWCASE_SCENES[safeSceneIndex];
-  const sceneElapsed = elapsedMilliseconds - sceneStartMilliseconds(safeSceneIndex);
-  const sceneProgress = Math.min(100, (sceneElapsed / (scene.durationSeconds * 1000)) * 100);
-  const totalProgress = Math.min(100, (elapsedMilliseconds / totalMilliseconds) * 100);
+  useEffect(() => {
+    onSceneChange(scene);
+  }, [onSceneChange, scene]);
 
   useEffect(() => {
-    chapterRefs.current[safeSceneIndex]?.scrollIntoView({ block: "nearest", inline: "nearest" });
-  }, [safeSceneIndex]);
-
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-      captureAttemptRef.current += 1;
-      recordingShouldDownloadRef.current = false;
-      if (recordingStopTimerRef.current !== null) window.clearTimeout(recordingStopTimerRef.current);
-      const recorder = recorderRef.current;
-      if (recorder && recorder.state !== "inactive") recorder.stop();
-      streamCleanup(recordingStreamRef.current);
-    };
-  }, []);
-
-  useEffect(() => {
-    elapsedRef.current = elapsedMilliseconds;
-  }, [elapsedMilliseconds]);
-
-  useEffect(() => {
-    if (!playing || recording) return;
-    const playbackStartedAt = performance.now() - elapsedRef.current;
+    if (!playing) return;
     const interval = window.setInterval(() => {
-      const next = Math.min(totalMilliseconds, performance.now() - playbackStartedAt);
-      elapsedRef.current = next;
-      setElapsedMilliseconds(next);
-      if (next >= totalMilliseconds) setPlaying(false);
+      setElapsedMilliseconds((current) => {
+        const next = Math.min(totalMilliseconds, current + 250);
+        if (next >= totalMilliseconds) setPlaying(false);
+        return next;
+      });
     }, 250);
     return () => window.clearInterval(interval);
-  }, [playing, recording, timelineRevision, totalMilliseconds]);
+  }, [playing, totalMilliseconds]);
 
   useEffect(() => {
-    if (!recording || recordingStartedAtRef.current === null) return;
-    const updateRecordingClock = () => {
-      if (recordingStartedAtRef.current === null) return;
-      const next = Math.min(totalMilliseconds, Date.now() - recordingStartedAtRef.current);
-      elapsedRef.current = next;
-      setRecordingElapsedMilliseconds(next);
-      setElapsedMilliseconds(next);
-      if (next >= totalMilliseconds) stopShowcaseRecording();
-    };
-    updateRecordingClock();
-    const interval = window.setInterval(updateRecordingClock, 200);
+    if (!recording) return;
+    const interval = window.setInterval(() => {
+      setRecordingElapsedMilliseconds(recordingStartedAtRef.current ? Date.now() - recordingStartedAtRef.current : 0);
+    }, 250);
     return () => window.clearInterval(interval);
-  }, [recording, stopShowcaseRecording, totalMilliseconds]);
+  }, [recording]);
 
   useEffect(() => {
-    if (!narrationEnabled || !playing || !("speechSynthesis" in window)) return;
-    const utterance = new SpeechSynthesisUtterance(`${scene.title}. ${scene.narration}`);
-    utterance.rate = 0.92;
-    utterance.pitch = 0.98;
+    if (!narrationEnabled || !narrationSupported) return;
     window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(scene.narration);
+    utterance.rate = 0.98;
+    utterance.pitch = 0.96;
     window.speechSynthesis.speak(utterance);
     return () => window.speechSynthesis.cancel();
-  }, [narrationEnabled, narrationRevision, playing, scene]);
+  }, [narrationEnabled, narrationSupported, scene]);
+
+  useEffect(() => () => {
+    if (recordingStopTimerRef.current !== null) window.clearTimeout(recordingStopTimerRef.current);
+    if (recorderRef.current?.state !== "inactive") recorderRef.current?.stop();
+    streamCleanup(recordingStreamRef.current);
+    window.speechSynthesis?.cancel();
+  }, []);
 
   const seekToScene = (index: number) => {
-    if (recording) return;
     const nextIndex = Math.max(0, Math.min(SHOWCASE_SCENES.length - 1, index));
-    const nextElapsed = sceneStartMilliseconds(nextIndex);
-    elapsedRef.current = nextElapsed;
-    setElapsedMilliseconds(nextElapsed);
-    setTimelineRevision((current) => current + 1);
-    setNarrationRevision((current) => current + 1);
-  };
-
-  const restartShowcase = () => {
-    if (recording) return;
-    elapsedRef.current = 0;
-    setElapsedMilliseconds(0);
-    setPlaying(true);
-    setTimelineRevision((current) => current + 1);
-    setNarrationRevision((current) => current + 1);
-  };
-
-  const togglePlayback = () => {
-    if (recording) return;
-    if (elapsedMilliseconds >= totalMilliseconds) {
-      restartShowcase();
-      return;
-    }
-    setPlaying((current) => !current);
-    setTimelineRevision((current) => current + 1);
-  };
-
-  const closeShowcase = () => {
-    if (recording || recordingStarting) {
-      setRecordingError("Stop the recording before exiting the showcase.");
-      return;
-    }
-    if ("speechSynthesis" in window) window.speechSynthesis.cancel();
-    onClose();
+    setElapsedMilliseconds(sceneStartMilliseconds(nextIndex));
+    setPlaying(false);
+    setCollapsed(false);
   };
 
   return (
-    <Overlay onClose={closeShowcase} immersive>
-      <article className="showcase" role="dialog" aria-modal="true" aria-label="Five-minute CashClose product showcase" data-showcase-scene={scene.id}>
-        <header className="showcase-header">
-          <button className="showcase-brand" onClick={restartShowcase} aria-label="Restart showcase" disabled={recording || recordingStarting}>
-            <span>C</span><strong>cashclose</strong><small>PRODUCT SHOWCASE</small>
-          </button>
-          <div className="showcase-runtime">
-            <span className={`status-dot ${source === "live" ? "success" : "working"}`}/>
-            <span><strong>{source === "live" ? "Live controller data" : "Curated truth-set preview"}</strong><small>{workspace.batch.model_provenance ? "Responses-guided run proven" : orchestrationMode === "responses-requested" ? "Responses planning requested" : "Safe deterministic run"}</small></span>
-          </div>
-          <div className={`showcase-clock ${recording ? "recording" : ""}`}>{recording ? <span className="recording-dot"/> : <TimerReset size={16}/>}<span><strong>{recording ? `REC ${formatShowcaseTime(recordingElapsedMilliseconds)}` : formatShowcaseTime(totalMilliseconds - elapsedMilliseconds)}</strong><small>{recording ? "wall-clock capture" : "of 5:00 remaining"}</small></span></div>
-          <button className="icon-button" onClick={closeShowcase} aria-label="Exit showcase" disabled={recording || recordingStarting}><X size={20}/></button>
-        </header>
+    <aside className={`demo-guide ${collapsed ? "collapsed" : ""}`} aria-label="Five-minute CashClose product demo guide">
+      <div className="demo-guide-progress" role="progressbar" aria-label="Demo progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(totalProgress)}><i style={{ width: `${totalProgress}%` }}/></div>
+      <header>
+        <div className="demo-live-label"><span className={recording ? "recording" : ""}/><strong>{recording ? "RECORDING" : "LIVE DEMO"}</strong></div>
+        <div className="demo-guide-clock"><strong>{recording ? formatShowcaseTime(recordingElapsedMilliseconds) : formatShowcaseTime(totalMilliseconds - elapsedMilliseconds)}</strong><small>{recording ? "CAPTURE" : "REMAINING"}</small></div>
+        <button className="icon-button" onClick={() => setCollapsed((current) => !current)} aria-label={collapsed ? "Expand demo guide" : "Minimize demo guide"}><ChevronDown size={18}/></button>
+        <button className="icon-button" onClick={() => { stopShowcaseRecording(); onClose(); }} aria-label="Exit demo guide"><X size={18}/></button>
+      </header>
 
-        <div className="showcase-master-progress" role="progressbar" aria-label="Showcase progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(totalProgress)}><i style={{ width: `${totalProgress}%` }}/></div>
-
-        <div className="showcase-layout">
-          <nav className="showcase-chapters" aria-label="Showcase chapters">
-            <p>Five-minute story</p>
-            {SHOWCASE_SCENES.map((item, index) => {
-              const Icon = item.icon;
-              const complete = elapsedMilliseconds >= sceneStartMilliseconds(index + 1);
-              return (
-                <button ref={(element) => { chapterRefs.current[index] = element; }} key={item.id} className={index === safeSceneIndex ? "active" : complete ? "complete" : ""} onClick={() => seekToScene(index)} aria-current={index === safeSceneIndex ? "step" : undefined} disabled={recording}>
-                  <span><Icon size={15}/></span>
-                  <span><strong>{item.label}</strong><small>{item.durationSeconds}s</small></span>
-                  {complete ? <Check size={13}/> : <em>{String(index + 1).padStart(2, "0")}</em>}
-                </button>
-              );
-            })}
+      {collapsed ? (
+        <button className="demo-collapsed-summary" onClick={() => setCollapsed(false)}>
+          <span>{String(sceneIndex + 1).padStart(2, "0")}</span>
+          <div><small>{scene.label}</small><strong>{scene.title}</strong></div>
+          <ChevronLeft size={17}/>
+        </button>
+      ) : (
+        <>
+          <nav className="demo-step-rail" aria-label="Demo chapters">
+            {SHOWCASE_SCENES.map((item, index) => <button key={item.id} className={index === sceneIndex ? "active" : index < sceneIndex ? "complete" : ""} onClick={() => seekToScene(index)} aria-label={`Open chapter ${index + 1}: ${item.label}`}><span>{index < sceneIndex ? <Check size={11}/> : index + 1}</span><small>{item.label}</small></button>)}
           </nav>
-
-          <section className="showcase-stage">
-            <span className="sr-only" aria-live="polite">Chapter {safeSceneIndex + 1}: {scene.title}</span>
-            <header>
-              <div>
-                <p className="eyebrow">{scene.eyebrow}</p>
-                <h2>{scene.title}</h2>
-              </div>
-              <span>CHAPTER {safeSceneIndex + 1} / {SHOWCASE_SCENES.length}</span>
-            </header>
-            <ShowcaseVisual
-              scene={scene.id}
-              workspace={workspace}
-              source={source}
-              orchestrationMode={orchestrationMode}
-              modelConfigured={modelConfigured}
-              responsesModel={responsesModel}
-            />
-            <footer className="showcase-caption">
-              <span><Volume2 size={17}/></span>
-              <p><strong>Presenter track</strong>{scene.narration}</p>
-            </footer>
+          <section className="demo-guide-content">
+            <p className="demo-guide-eyebrow">{scene.eyebrow}</p>
+            <h2>{scene.title}</h2>
+            <div className="demo-presenter-script"><Volume2 size={16}/><p>{scene.narration}</p></div>
+            <div className="demo-operator-cue"><MonitorPlay size={16}/><p><strong>ON SCREEN</strong>{scene.operatorCue}</p></div>
+            <div className="demo-runtime-context">
+              <span><Database size={13}/>{source === "live" ? "Live API data" : "Interactive preview"}</span>
+              <span><Bot size={13}/>{modelConfigured ? responsesModel : "Validated controller"}</span>
+              <code>{workspace.batch.batch_id}</code>
+            </div>
           </section>
-        </div>
-
-        <footer className="showcase-controls">
-          <div className="showcase-scene-progress" role="progressbar" aria-label="Chapter progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(sceneProgress)}><i style={{ width: `${sceneProgress}%` }}/></div>
-          <button className="button secondary showcase-chapter-control" onClick={() => seekToScene(safeSceneIndex - 1)} disabled={recording || safeSceneIndex === 0}><ChevronLeft size={16}/> Previous</button>
-          <button className="showcase-play" onClick={togglePlayback} aria-label={elapsedMilliseconds >= totalMilliseconds ? "Replay showcase" : playing ? "Pause showcase" : "Play showcase"} disabled={recording}>{playing ? <Pause size={19}/> : <Play size={19} fill="currentColor"/>}</button>
-          <button className="button secondary showcase-chapter-control" onClick={() => seekToScene(safeSceneIndex + 1)} disabled={recording || safeSceneIndex === SHOWCASE_SCENES.length - 1}>Next <ChevronRight size={16}/></button>
-          <button className={`button secondary narration-toggle ${narrationEnabled ? "active" : ""}`} onClick={() => setNarrationEnabled((current) => !current)} aria-pressed={narrationEnabled} disabled={!narrationSupported}>{narrationEnabled ? <Volume2 size={16}/> : <VolumeX size={16}/>} Narration</button>
-          <button className={`button secondary recording-toggle ${recording ? "active" : ""}`} onClick={() => recording ? stopShowcaseRecording() : void startShowcaseRecording()} disabled={recordingStarting} aria-pressed={recording}>{recording ? <Square size={14} fill="currentColor"/> : recordingStarting ? <Loader2 className="spin" size={16}/> : <Video size={16}/>} {recording ? "Stop & download" : recordingStarting ? "Choose tab…" : "Record 5:00"}</button>
-          <button className="button primary" onClick={closeShowcase} disabled={recording || recordingStarting}>Exit showcase</button>
-          {recordingError ? <p className="showcase-recording-error" role="alert">{recordingError}</p> : null}
-        </footer>
-      </article>
-    </Overlay>
+          <footer className="demo-guide-controls">
+            <button className="icon-button" onClick={() => seekToScene(sceneIndex - 1)} disabled={sceneIndex === 0} aria-label="Previous demo chapter"><ChevronLeft size={18}/></button>
+            <button className="demo-play-control" onClick={() => elapsedMilliseconds >= totalMilliseconds ? restartShowcase() : setPlaying((current) => !current)} aria-label={playing ? "Pause demo timer" : "Start demo timer"}>{playing ? <Pause size={16}/> : <Play size={16} fill="currentColor"/>}<span>{playing ? "Pause" : elapsedMilliseconds ? "Resume" : "Start 5:00"}</span></button>
+            <button className="icon-button" onClick={() => seekToScene(sceneIndex + 1)} disabled={sceneIndex === SHOWCASE_SCENES.length - 1} aria-label="Next demo chapter"><ChevronRight size={18}/></button>
+            {scene.actionLabel ? <button className="button primary demo-proof-action" onClick={() => onAction(scene)}>{scene.actionLabel}<ArrowRight size={14}/></button> : null}
+            <button className={`icon-button narration-button ${narrationEnabled ? "active" : ""}`} onClick={() => setNarrationEnabled((current) => !current)} disabled={!narrationSupported} aria-label={narrationEnabled ? "Turn narration off" : "Turn narration on"}>{narrationEnabled ? <Volume2 size={16}/> : <VolumeX size={16}/>}</button>
+            <button className={`button secondary recording-toggle ${recording ? "active" : ""}`} onClick={() => recording ? stopShowcaseRecording() : void startShowcaseRecording()} disabled={recordingStarting}>{recording ? <Square size={13} fill="currentColor"/> : recordingStarting ? <Loader2 className="spin" size={15}/> : <Video size={15}/>} {recording ? "Stop & download" : recordingStarting ? "Choose tab…" : "Record 5:00"}</button>
+          </footer>
+          {recordingError ? <p className="demo-recording-error" role="alert">{recordingError}</p> : null}
+          <div className="demo-scene-progress"><i style={{ width: `${sceneProgress}%` }}/></div>
+        </>
+      )}
+    </aside>
   );
 }
 
-function ShowcaseVisual({
-  scene,
-  workspace,
-  source,
-  orchestrationMode,
-  modelConfigured,
-  responsesModel,
-}: {
-  scene: ShowcaseSceneId;
-  workspace: WorkspaceData;
-  source: Source;
-  orchestrationMode: string;
-  modelConfigured: boolean;
-  responsesModel: string;
-}) {
-  const combined = workspace.matches.proposals.find((proposal) => proposal.allocations.length > 1) ?? workspace.matches.proposals[0];
-  const exception = workspace.exceptions.find((item) => item.reason_code === "AMBIGUOUS_MATCH") ?? workspace.exceptions[0];
-  const featuredDetail = combined ? workspace.records.find((item) => item.record.record_id === combined.transaction_id) : undefined;
-  const eventSamples = featuredDetail
-    ? (source === "preview" ? previewEventsForRecord(featuredDetail) : eventsForRecord(workspace.events, featuredDetail)).filter((event) => event.tool_name).slice(0, 5)
-    : [];
-  const matching = workspace.metrics.matching;
-  const provenance = workspace.batch.model_provenance;
-  const allocationDeduction = combined?.permitted_deduction ?? money("0");
-  const allocationBalances = combined
-    ? moneyToMinorUnits(addMoney(combined.total_allocated, allocationDeduction)) === moneyToMinorUnits(combined.transaction_amount)
-    : false;
-  const allocationStatus = allocationBalances
-    ? moneyToMinorUnits(allocationDeduction) === BigInt(0) ? "EXACT" : "BALANCED + DEDUCTION"
-    : "POLICY CHECKED";
-
-  if (scene === "opening") {
-    return <div className="showcase-opening">
-      <div className="showcase-hero-mark"><span>C</span><i/></div>
-      <div className="showcase-hero-copy"><p>AGENTIC RECONCILIATION CONTROLLER</p><h3>Reconcile. Forecast.<br/><em>Explain every exception.</em></h3><span><ShieldCheck size={18}/> Financial actions remain deterministic and auditable.</span></div>
-      <div className="showcase-kpis"><span><small>VALUE RECONCILED</small><strong>{compactMoney(matching.value_reconciled, matching.currency)}</strong></span><span><small>PRECISION</small><strong>{confidencePercent(matching.precision)}</strong></span><span><small>30-DAY LOW</small><strong>{compactMoney(workspace.metrics.forecast_cash_minimum, matching.currency)}</strong></span></div>
-    </div>;
-  }
-
-  if (scene === "problem") {
-    return <div className="showcase-problem">
-      <div className="showcase-problem-card"><Banknote size={23}/><span><small>FRAGMENTED INPUTS</small><strong>Bank, invoices, ledger, remittance</strong><p>References disagree and payments rarely map one-to-one.</p></span></div>
-      <div className="showcase-problem-card"><AlertTriangle size={23}/><span><small>UNSAFE AUTOMATION</small><strong>{compactMoney(matching.unresolved_value, matching.currency)} needs explanation</strong><p>Amount-only matches and contradictions cannot be silently approved.</p></span></div>
-      <div className="showcase-problem-card"><Activity size={23}/><span><small>FORECAST RISK</small><strong>Unverified cash poisons the outlook</strong><p>The opening position must be established before scenarios mean anything.</p></span></div>
-      <div className="showcase-rule"><LockKeyhole size={24}/><p><strong>The governing rule</strong>The AI decides what to investigate and which approved tools to use. Deterministic code performs money calculations, constraints, writes, and metrics.</p></div>
-    </div>;
-  }
-
-  if (scene === "architecture") {
-    return <div className="showcase-architecture">
-      <div className="showcase-architecture-path">
-        <section><FileSpreadsheet size={21}/><span><small>INPUT</small><strong>Validated CSV truth layer</strong></span></section><i><ArrowRight size={16}/></i>
-        <section className="agent"><Bot size={21}/><span><small>CONTROL PLANE</small><strong>One bounded controller</strong></span></section><i><ArrowRight size={16}/></i>
-        <section><ShieldCheck size={21}/><span><small>AUTHORITY</small><strong>Deterministic finance core</strong></span></section><i><ArrowRight size={16}/></i>
-        <section><LayoutDashboard size={21}/><span><small>OUTPUT</small><strong>Evidence, forecast, audit</strong></span></section>
-      </div>
-      <div className="showcase-specialists"><section><ArrowLeftRight size={20}/><strong>Reconciliation specialist</strong><small>Normalization, candidates, allocation, evidence</small></section><section><ShieldCheck size={20}/><strong>Verification specialist</strong><small>Thresholds, contradictions, policy approval</small></section><section><Activity size={20}/><strong>Forecast specialist</strong><small>Verified cash, scenarios, movement explanation</small></section></div>
-      <div className="showcase-runtime-boundary"><div><span>RUNNING DEMO</span><strong>React 19 / Vinext UI → FastAPI → in-memory batch state</strong><small>Docker also starts PostgreSQL and Redis, but this hackathon service has not wired them as persistence or job execution yet.</small></div><div><span>PRODUCTION TARGET</span><strong>Supabase Postgres + Storage · Redis/RQ worker</strong><small>The API and validated tool contracts are the seam for that deployment step.</small></div></div>
-    </div>;
-  }
-
-  if (scene === "truth") {
-    const activeBankRows = workspace.records.filter((item) => item.record.record_type === "bank_transaction").length;
-    const validatedSource = source === "preview" ? "Fixed-seed fixture" : "Validated CSV input";
-    const inputs = [
-      ["Bank transactions", activeBankRows ? `${activeBankRows} active rows` : validatedSource, Banknote],
-      ["Invoices", validatedSource, FileSpreadsheet],
-      ["Ledger entries", validatedSource, Database],
-      ["Remittances", validatedSource, FileCheck2],
-    ] as const;
-    return <div className="showcase-truth">
-      <div className="showcase-file-grid">{inputs.map(([label, count, Icon]) => <section key={label}><span><Icon size={22}/></span><div><small>CSV SOURCE</small><strong>{label}</strong><p>{count} · schema checked</p></div><CheckCircle2 size={18}/></section>)}</div>
-      <div className="showcase-validation-flow"><span><strong>01</strong> Pydantic schema</span><i/><span><strong>02</strong> Currency + Decimal</span><i/><span><strong>03</strong> Referential integrity</span><i/><span><strong>04</strong> Batch accepted</span></div>
-      <p className="showcase-disclosure"><LockKeyhole size={17}/><span><strong>Ground-truth isolation:</strong> expected matches, exceptions, and future actual cash are evaluator-only artifacts and never enter the controller context.</span></p>
-    </div>;
-  }
-
-  if (scene === "planning") {
-    const responsesActive = Boolean(provenance);
-    const responsesPending = !provenance && orchestrationMode === "responses-requested";
-    const observationTools = provenance?.tool_choices.filter((choice) => choice.outcome === "executed").map((choice) => choice.tool_name) ?? [];
-    const strategy = provenance?.strategy;
-    return <div className="showcase-planning">
-      <div className="showcase-model-status"><span><Sparkles size={22}/></span><div><small>OPENAI RESPONSES MODE · {provenance?.model ?? responsesModel}</small><strong>{responsesActive ? "Completed for this batch" : responsesPending ? "Planning is in progress" : modelConfigured ? "Ready for the next batch" : "Optional mode—not configured in this runtime"}</strong><p>The model may choose investigation and strategy only.</p></div><em>{responsesActive ? "PROVEN" : responsesPending ? "PLANNING" : modelConfigured ? "READY" : "DEMO PATH"}</em></div>
-      <div className="showcase-turns">
-        <section><span>TURN 1</span><strong>Observe and select tools</strong><p>Choose 1–3 distinct read-only calls.</p>{observationTools.length ? <div>{observationTools.map((tool) => <code key={tool}>{tool}</code>)}</div> : <small className="showcase-awaiting">{responsesPending ? "Waiting for the model selection…" : "No model selection recorded for this batch."}</small>}{provenance ? <small className="showcase-response-ref">response · {provenance.response_ids[0]}</small> : null}</section>
-        <i><ArrowRight size={18}/><small>structured outputs returned</small></i>
-        <section><span>TURN 2</span><strong>Select bounded strategy</strong><p>Set record order, candidate breadth, and deterministic or Monte Carlo forecast.</p>{strategy ? <div><code>{strategy.record_order}</code><code>{strategy.candidate_search}</code><code>{strategy.forecast_method}</code></div> : <small className="showcase-awaiting">Strategy appears only after a successful second turn.</small>}{provenance ? <small className="showcase-response-ref">response · {provenance.response_ids[1]}</small> : null}</section>
-      </div>
-      <div className="showcase-denied-actions"><LockKeyhole size={18}/><span><strong>The model cannot:</strong> execute SQL · calculate totals · commit matches · edit invoices · see private ground truth.</span></div>
-    </div>;
-  }
-
-  if (scene === "reconciliation" && combined) {
-    return <div className="showcase-reconciliation">
-      <div className="showcase-transaction"><span><Banknote size={24}/></span><div><small>BANK TRANSACTION · {combined.transaction_id}</small><strong>{formatMoney(combined.transaction_amount, combined.currency)}</strong><code>{workspace.records.find((item) => item.record.record_id === combined.transaction_id)?.record.reference ?? "Combined remittance reference"}</code></div><em>{confidencePercent(combined.confidence)} confidence</em></div>
-      <div className="showcase-gates">{TRACE_STAGES.map((stage, index) => <section key={stage.id}><span>{index + 1}</span><strong>{stage.label}</strong><small>{stage.defaultTool}</small>{index < TRACE_STAGES.length - 1 ? <i/> : null}</section>)}</div>
-      <div className="showcase-allocation"><div><small>DETERMINISTIC ALLOCATION</small><strong>{combined.allocations.length} invoices solved</strong></div>{combined.allocations.map((allocation) => <span key={allocation.invoice_id}><code>{allocation.invoice_id}</code><strong>{formatMoney(allocation.amount, allocation.currency)}</strong><Check size={14}/></span>)}<footer><span>Total allocated</span><strong>{formatMoney(combined.total_allocated, combined.currency)}</strong><em>{allocationStatus}</em></footer></div>
-      <div className="showcase-event-strip">{eventSamples.map((event) => <span key={event.sequence}><i/><strong>{event.tool_name}</strong><small>{formatDuration(event.latency_ms)}</small></span>)}</div>
-    </div>;
-  }
-
-  if (scene === "exception" && exception) {
-    return <div className="showcase-exception">
-      <section className="showcase-exception-record"><div><span><AlertTriangle size={22}/></span><p><small>{exception.exception_id} · {exception.record_id}</small><strong>{titleCase(exception.reason_code)}</strong><em>{exception.counterparty ?? "Counterparty unresolved"}</em></p><b>{exception.status.replaceAll("_", " ")}</b></div><blockquote>“{DEMO_EXCEPTION_META[exception.exception_id]?.explanation ?? "The available evidence does not support a safe automatic match."}”</blockquote></section>
-      <section className="showcase-exception-evidence"><p className="eyebrow">WHY THE CONTROLLER ABSTAINED</p>{exception.evidence.slice(0, 3).map((item) => <div key={item.evidence_id}><span><Link2 size={16}/></span><p><strong>{titleCase(item.evidence_type)}</strong><small>{item.summary}</small></p></div>)}</section>
-      <section className="showcase-next-action"><UserCheck size={22}/><p><small>RECOMMENDED NEXT ACTION</small><strong>{exception.next_action}</strong></p></section>
-    </div>;
-  }
-
-  if (scene === "reconciliation" || scene === "exception") {
-    const isReconciliation = scene === "reconciliation";
-    return <div className="showcase-empty"><span>{isReconciliation ? <ArrowLeftRight size={28}/> : <ShieldCheck size={28}/>}</span><strong>{isReconciliation ? "No match proposal in this workspace yet" : "No exception requires review"}</strong><p>{isReconciliation ? "Run a validated close batch to populate transaction-level allocation evidence." : "This batch has no unresolved record to feature in the safe-abstention chapter."}</p></div>;
-  }
-
-  if (scene === "forecast") {
-    const activeScenario = workspace.forecast.scenario.action_type && workspace.forecast.scenario.action_type !== "base";
-    const scenarioLabel = activeScenario ? workspace.forecast.scenario.scenario_name ?? titleCase(workspace.forecast.scenario.action_type ?? "scenario") : "Example: Acme pays 7 days late";
-    return <div className="showcase-forecast">
-      <div className="showcase-forecast-chart"><div><span><i className="confirmed"/>Confirmed</span><span><i className="expected"/>Expected</span><span><i className="risk"/>Risk-adjusted</span></div><CashChart forecast={workspace.forecast} compact/></div>
-      <div className="showcase-forecast-facts"><section><ArrowDownRight size={20}/><small>EXPECTED LOW</small><strong>{compactMoney(workspace.forecast.minimum_expected_cash, workspace.forecast.currency)}</strong><span>{formatDate(workspace.forecast.minimum_expected_cash_date)}</span></section><section><AlertTriangle size={20}/><small>SHORTFALL</small><strong>{workspace.forecast.shortfall_date ? formatDate(workspace.forecast.shortfall_date) : "None"}</strong><span>Calculated from verified records</span></section><section><SlidersHorizontal size={20}/><small>{activeScenario ? "ACTIVE SCENARIO" : "SCENARIO EXAMPLE"}</small><strong>{scenarioLabel}</strong><span>Recalculate, never improvise</span></section></div>
-    </div>;
-  }
-
-  if (scene === "audit") {
-    const scores = [["Precision", matching.precision], ["Recall", matching.recall], ["Automation", matching.automation_coverage], ["Exception recall", matching.exception_recall]] as const;
-    return <div className="showcase-audit">
-      <div className="showcase-score-row">{scores.map(([label, value]) => <section key={label}><small>{label}</small><strong>{confidencePercent(value)}</strong><i><span style={{ width: confidencePercent(value) }}/></i></section>)}</div>
-      <div className="showcase-audit-trail"><header><span><ShieldCheck size={18}/> Append-only recorded decision trail</span><em>{workspace.audit.entries.length} entries</em></header>{workspace.audit.entries.slice(-4).map((entry) => <div key={entry.sequence}><span>{String(entry.sequence).padStart(3, "0")}</span><p><strong>{titleCase(entry.action)}</strong><small>{entry.actor} · {entry.reference}</small></p><time>{formatDate(entry.timestamp, { hour: "2-digit", minute: "2-digit" })}</time></div>)}</div>
-      <p className="showcase-ground-truth"><LockKeyhole size={17}/><span>Independent evaluator · ground truth visible to agent: <strong>NO</strong> · Forecast MAE: <strong>{formatMoney(workspace.evaluation.forecast_metrics.mae, workspace.evaluation.forecast_metrics.currency)}</strong></span></p>
-    </div>;
-  }
-
-  return <div className="showcase-closing">
-    <div className="showcase-closing-mark"><CheckCircle2 size={42}/></div>
-    <p>FROM SOURCE FILES TO A DEFENSIBLE CASH POSITION</p>
-    <h3>Every match evidenced.<br/>Every exception explained.<br/><em>Every forecast calculated.</em></h3>
-    <div><span><Bot size={18}/><strong>Agentic investigation</strong></span><span><ShieldCheck size={18}/><strong>Deterministic control</strong></span><span><Activity size={18}/><strong>Decision-ready cash</strong></span></div>
-    <footer><strong>CashClose AI</strong><span>Cash position, verified.</span></footer>
-  </div>;
-}
-
 function ArchitectureDialog({ onClose }: { onClose: () => void }) {
-  return <Overlay onClose={onClose}><article className="modal architecture-modal"><DrawerHeader icon={<Bot size={20}/>} eyebrow="AGENTIC CONTROL PLANE" title="One controller. Bounded specialists." subtitle="The agent decides what to investigate; deterministic tools remain the financial authority." onClose={onClose}/><div className="architecture-map"><section className="controller-node"><span><Bot size={22}/></span><div><small>ORCHESTRATOR</small><strong>Controller agent</strong><p>Plans the run, selects tools, enforces terminal coverage.</p></div></section><div className="architecture-line"><i/><span>structured tool calls</span><i/></div><div className="specialist-grid"><section><ArrowLeftRight size={20}/><strong>Reconciliation</strong><small>Candidate search and evidence assembly</small></section><section><ShieldCheck size={20}/><strong>Verification</strong><small>Policy checks and contradiction detection</small></section><section><Activity size={20}/><strong>Forecast</strong><small>Scenario investigation and explanation</small></section></div><div className="architecture-line"><i/><span>validated schemas</span><i/></div><section className="deterministic-node"><div><Database size={21}/><span><strong>Deterministic finance core</strong><small>Decimal arithmetic · OR-Tools constraints · idempotent writes · metrics</small></span></div><BadgeCheck size={25}/></section></div><footer className="modal-footer"><button className="button primary" onClick={onClose}>Got it</button></footer></article></Overlay>;
+  return <Overlay onClose={onClose}><article className="modal architecture-modal"><DrawerHeader icon={<Bot size={20}/>} eyebrow="AGENTIC CONTROL PLANE" title="One controller. Bounded specialists." subtitle="The agent decides what to investigate; validated tools remain the financial authority." onClose={onClose}/><div className="architecture-map"><section className="controller-node"><span><Bot size={22}/></span><div><small>ORCHESTRATOR</small><strong>Controller agent</strong><p>Plans the run, selects tools, enforces terminal coverage.</p></div></section><div className="architecture-line"><i/><span>structured tool calls</span><i/></div><div className="specialist-grid"><section><ArrowLeftRight size={20}/><strong>Reconciliation</strong><small>Candidate search and evidence assembly</small></section><section><ShieldCheck size={20}/><strong>Verification</strong><small>Policy checks and contradiction detection</small></section><section><Activity size={20}/><strong>Forecast</strong><small>Scenario investigation and explanation</small></section></div><div className="architecture-line"><i/><span>validated schemas</span><i/></div><section className="deterministic-node"><div><Database size={21}/><span><strong>Finance control core</strong><small>Decimal arithmetic · OR-Tools constraints · idempotent writes · metrics</small></span></div><BadgeCheck size={25}/></section></div><footer className="modal-footer"><button className="button primary" onClick={onClose}>Got it</button></footer></article></Overlay>;
 }
 
 function DrawerHeader({ icon, eyebrow, title, subtitle, onClose }: { icon: ReactNode; eyebrow: string; title: string; subtitle: string; onClose?: () => void }) {
   return <header className="drawer-header"><span className="drawer-icon">{icon}</span><div><p className="eyebrow">{eyebrow}</p><h2>{title}</h2><p>{subtitle}</p></div>{onClose ? <button className="icon-button" onClick={onClose} aria-label="Close"><X size={20}/></button> : null}</header>;
 }
 
-function Overlay({ children, onClose, side = false, immersive = false }: { children: ReactNode; onClose?: () => void; side?: boolean; immersive?: boolean }) {
+function Overlay({ children, onClose, side = false }: { children: ReactNode; onClose?: () => void; side?: boolean }) {
   const overlayRef = useRef<HTMLDivElement | null>(null);
   const onCloseRef = useRef(onClose);
   useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
@@ -2511,7 +2379,7 @@ function Overlay({ children, onClose, side = false, immersive = false }: { child
       previousFocus?.focus();
     };
   }, []);
-  return <div ref={overlayRef} tabIndex={-1} className={`overlay ${side ? "side-overlay" : ""} ${immersive ? "immersive-overlay" : ""}`} role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onCloseRef.current?.(); }}>{children}</div>;
+  return <div ref={overlayRef} tabIndex={-1} className={`overlay ${side ? "side-overlay" : ""}`} role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onCloseRef.current?.(); }}>{children}</div>;
 }
 
 function EmptyState({ title, detail, action }: { title: string; detail: string; action?: ReactNode }) {
