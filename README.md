@@ -4,7 +4,7 @@ CashClose AI is an agentic reconciliation controller that establishes verified
 cash, forecasts the next 30 days, and explains every exception.
 
 > The controller decides what to investigate and which approved tool to use.
-> Deterministic code owns money calculations, allocation constraints, writes,
+> The validated finance core owns money calculations, allocation constraints, writes,
 > verification, and evaluation metrics.
 
 The repository contains a polished interactive hackathon demo, a runnable
@@ -30,7 +30,7 @@ ground truth.
 - CSV upload preflight experience for bank, invoice, ledger, and remittance data
 - Full requested REST API and Server-Sent Events endpoint
 - Optional Responses API planner using `gpt-5.6-terra`; no key is required for
-  the deterministic demo
+  the complete controller workflow
 - Pydantic validation around every tool input and result
 - Idempotent commit, verifier approval, currency checks, invoice-reuse
   prevention, and hard-risk exception routing
@@ -42,7 +42,7 @@ ground truth.
 
 ```text
 app/                         Interactive Next.js/vinext controller UI
-apps/api/                    FastAPI routes and deterministic demo service
+apps/api/                    FastAPI routes and controller service
 apps/worker/                 Redis/RQ worker entry points
 packages/agents/             Controller, verifier, prompts, tool schemas
 packages/finance/            Matching, scoring, allocation, cash, forecast
@@ -82,7 +82,7 @@ python3 -m apps.api
 
 The OpenAPI UI is available at `http://localhost:8000/docs`.
 
-Create and run a deterministic demo batch:
+Create and run a controller batch:
 
 ```bash
 curl -X POST http://localhost:8000/api/batches \
@@ -101,7 +101,7 @@ adapter defaults to `gpt-5.6-terra` (override it with
 function schemas, and cannot access evaluator ground truth. The first turn may
 choose one to three read-only batch observations; the second must choose one
 validated controller strategy. Financial calculations and writes remain in the
-deterministic tool layer. Confirm model access for the target OpenAI account.
+validated finance tool layer. Confirm model access for the target OpenAI account.
 
 The two Responses turns use `previous_response_id`, so those planner responses
 are stored for continuity. Only batch metadata and structured validation
@@ -188,7 +188,7 @@ python3 -m pytest -q
 
 The frontend gates include the production build, server render, typed API
 client, SSE fallback, exact-money helpers, manual review requests, and audit
-downloads. The Python suite covers deterministic arithmetic, matching and
+downloads. The Python suite covers exact-money arithmetic, matching and
 allocation, forecasting, tool guardrails, idempotency, API isolation,
 synthetic scenario counts, and evaluator metrics.
 
