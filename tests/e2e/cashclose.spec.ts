@@ -11,10 +11,10 @@ test("runs the controller and exercises every finance workspace", async ({ page 
   await expect(page.getByRole("heading", { name: "Cash position, verified." })).toBeVisible();
   await expect(page.getByRole("button", { name: "API online" })).toBeVisible();
 
-  await page.getByRole("button", { name: "Run controller" }).click();
+  await page.getByRole("button", { name: "Start close run" }).click();
   await expect(page.getByRole("heading", { name: "Choose the truth layer" })).toBeVisible();
   await expect(page.getByText("Docker API is ready")).toBeVisible();
-  await page.getByRole("button", { name: "Run demo controller" }).click();
+  await page.getByRole("button", { name: "Run controller" }).click();
   await expect(page.getByRole("heading", { name: "Close complete" })).toBeVisible({ timeout: 45_000 });
   await page.getByRole("button", { name: "Open controller results" }).click();
   await expect(page.getByText("Live Docker workspace")).toBeVisible();
